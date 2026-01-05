@@ -204,9 +204,13 @@ const cleanVersionContent = (content: string): string => {
   // 尝试解析JSON，看是否是完整的章节对象
   try {
     const parsed = JSON.parse(content)
-    if (parsed && typeof parsed === 'object' && parsed.content) {
-      // 如果是章节对象，提取content字段
-      content = parsed.content
+    if (parsed && typeof parsed === 'object') {
+      // 优先使用 full_content，其次是 content
+      if (parsed.full_content) {
+        content = parsed.full_content
+      } else if (parsed.content) {
+        content = parsed.content
+      }
     }
   } catch (error) {
     // 如果不是JSON，继续处理字符串
