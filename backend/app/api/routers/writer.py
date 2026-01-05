@@ -245,10 +245,16 @@ async def generate_chapter(
     metadata: List[Dict] = []
     for variant in raw_versions:
         if isinstance(variant, dict):
-            if "content" in variant and isinstance(variant["content"], str):
+            # 优先提取 full_content 字段（新的章节生成格式）
+            if "full_content" in variant and isinstance(variant["full_content"], str):
+                contents.append(variant["full_content"])
+            # 其次尝试 content 字段
+            elif "content" in variant and isinstance(variant["content"], str):
                 contents.append(variant["content"])
+            # 最后尝试 chapter_content 字段
             elif "chapter_content" in variant:
                 contents.append(str(variant["chapter_content"]))
+            # 如果以上字段都不存在，则将整个对象序列化为 JSON
             else:
                 contents.append(json.dumps(variant, ensure_ascii=False))
             metadata.append(variant)
