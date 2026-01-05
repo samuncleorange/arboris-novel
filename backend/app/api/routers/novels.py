@@ -231,6 +231,7 @@ async def generate_blueprint(
         logger.warning("项目 %s 缺少对话历史，无法生成蓝图", project_id)
         raise HTTPException(status_code=400, detail="缺少对话历史，请先完成概念对话后再生成蓝图")
 
+    # 提取对话历史中的用户输入和 AI 响应
     formatted_history: List[Dict[str, str]] = []
     for record in history_records:
         role = record.role
@@ -258,10 +259,39 @@ async def generate_blueprint(
             detail="无法从历史对话中提取有效内容，请检查对话历史格式或重新进行概念对话"
         )
 
+    # 关键修复：提取对话摘要，而不是传递完整历史
+    # 从对话中提取关键信息作为简洁的上下文
+    summary_parts = []
+    for msg in formatted_history:
+        if msg["role"] == "user":
+            summary_parts.append(f"用户: {msg['content']}")
+        else:
+            # 只保留 AI 消息的前 200 字符，避免过长
+            ai_content = msg['content'][:200] if len(msg['content']) > 200 else msg['content']
+            summary_parts.append(f"文思: {ai_content}")
+
+    # 将对话摘要合并为一个简洁的上下文
+    conversation_summary = "\n\n".join(summary_parts[-20:])  # 只保留最后 10 轮对话（20 条消息）
+
+    # 构建简洁的历史上下文
+    concise_history = [
+        {
+            "role": "user",
+            "content": f"以下是我与文思的对话摘要，请基于这些信息生成完整的小说蓝图：\n\n{conversation_summary}"
+        }
+    ]
+
+    logger.info(
+        "项目 %s 蓝图生成输入: 原始对话 %d 条，摘要长度 %d 字符",
+        project_id,
+        len(formatted_history),
+        len(conversation_summary),
+    )
+
     system_prompt = _ensure_prompt(await prompt_service.get_prompt("screenwriting"), "screenwriting")
     blueprint_raw = await llm_service.get_llm_response(
         system_prompt=system_prompt,
-        conversation_history=formatted_history,
+        conversation_history=concise_history,
         temperature=0.3,
         user_id=current_user.id,
         timeout=480.0,
@@ -269,6 +299,24 @@ async def generate_blueprint(
         max_tokens=16000,
     )
     blueprint_raw = remove_think_tags(blueprint_raw)
+
+    if not blueprint_raw or not blueprint_raw.strip():
+        logger.error(
+            "项目 %s 蓝图生成失败: LLM 返回空内容。对话摘要长度: %d",
+            project_id,
+            len(conversation_summary),
+        )
+        raise HTTPException(
+            status_code=500,
+            detail="蓝图生成失败，AI 返回了空内容。请尝试重新生成，或联系管理员。"
+        )
+
+    logger.info(
+        "项目 %s 蓝图生成响应: 长度 %d 字符，预览: %s",
+        project_id,
+        len(blueprint_raw),
+        blueprint_raw[:200],
+    )
 
     blueprint_normalized = unwrap_markdown_json(blueprint_raw)
     blueprint_sanitized = sanitize_json_like_text(blueprint_normalized)
