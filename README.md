@@ -292,18 +292,125 @@ docker compose -f deploy/docker-compose.yml up -d --build
 
 ---
 
+## GitHub Actions 自动构建 Docker 镜像
+
+项目已配置 GitHub Actions 自动化工作流，可以自动构建多架构（x86_64 和 ARM64）Docker 镜像并推送到 GitHub Container Registry。
+
+### 🚀 触发条件
+
+自动构建会在以下情况触发：
+
+1. **推送到主分支** - 当代码推送到 `main` 或 `master` 分支时
+2. **创建版本标签** - 当创建以 `v` 开头的标签时（如 `v1.0.0`）
+3. **Pull Request** - 创建 PR 时会构建但不推送镜像（用于测试）
+4. **手动触发** - 在 GitHub Actions 页面手动运行工作流
+
+### 📦 镜像标签策略
+
+构建产物会被推送到 `ghcr.io/[用户名]/arboris-novel`，支持多种标签：
+
+| 标签格式 | 示例 | 说明 |
+|---------|------|------|
+| `latest` | `latest` | 始终指向主分支最新构建（仅在 main/master 分支） |
+| 分支名 | `main`, `dev` | 对应分支的最新构建 |
+| 语义化版本 | `v1.0.0`, `v1.0`, `v1` | 基于 Git 标签的版本号 |
+| PR 编号 | `pr-123` | Pull Request 的测试构建 |
+| Commit SHA | `main-sha-abc1234` | 特定提交的构建 |
+
+### ⚙️ 首次使用配置
+
+**第一步：启用 GitHub Actions 写权限**
+
+1. 进入仓库的 **Settings** > **Actions** > **General**
+2. 找到 **Workflow permissions** 部分
+3. 选择 **Read and write permissions**
+4. 勾选 **Allow GitHub Actions to create and approve pull requests**
+5. 点击 **Save** 保存
+
+**第二步：推送代码或创建标签**
+
+```bash
+# 方式一：推送到主分支（触发自动构建）
+git push origin main
+
+# 方式二：创建版本标签（推荐）
+git tag v1.1.0
+git push origin v1.1.0
+
+# 构建完成后，镜像会自动推送到：
+# ghcr.io/你的用户名/arboris-novel:latest
+# ghcr.io/你的用户名/arboris-novel:v1.1.0
+# ghcr.io/你的用户名/arboris-novel:v1.1
+# ghcr.io/你的用户名/arboris-novel:v1
+```
+
+### 📥 使用发布的镜像
+
+**公开镜像（无需登录）：**
+
+```bash
+# 拉取最新版本
+docker pull ghcr.io/你的用户名/arboris-novel:latest
+
+# 拉取指定版本
+docker pull ghcr.io/你的用户名/arboris-novel:v1.1.0
+
+# 使用 docker-compose（修改 docker-compose.yml 中的 image 字段）
+docker compose up -d
+```
+
+**如果镜像是私有的，需要先登录：**
+
+```bash
+# 使用 Personal Access Token 登录
+echo $GITHUB_TOKEN | docker login ghcr.io -u 你的用户名 --password-stdin
+
+# 然后正常拉取
+docker pull ghcr.io/你的用户名/arboris-novel:latest
+```
+
+### 🔍 查看构建状态
+
+1. 进入仓库的 **Actions** 标签页
+2. 点击最新的工作流运行记录
+3. 查看构建日志和结果
+
+构建完成后，可以在仓库首页右侧的 **Packages** 部分看到发布的镜像。
+
+### 🛠️ 工作流文件说明
+
+工作流配置文件位于 `.github/workflows/docker-build.yml`，主要功能：
+
+- ✅ 支持多架构构建（linux/amd64, linux/arm64）
+- ✅ 使用 GitHub Actions 缓存加速构建
+- ✅ 自动提取元数据并生成标签
+- ✅ 仅在非 PR 时推送镜像
+- ✅ 使用 GITHUB_TOKEN 自动认证
+
+如需自定义构建配置，可以直接编辑该文件。
+
+---
+
 ## 修复说明（v1.1.0）
 
 1. **修复 Claude API 兼容性问题**
    - 显式设置 `response_format=None`，解决 Claude 不支持 OpenAI `response_format` 参数的问题
+   - 添加默认 `max_tokens=8000`，防止响应被截断
 
 2. **优化蓝图生成提示词**
    - 简化 `screenwriting.md`，减少 token 消耗
    - 增强 JSON 输出格式约束
+   - 修复 `concept.md` 中对话完成逻辑，明确指示 LLM 设置 `is_complete=true`
 
-3. **多架构 Docker 镜像**
+3. **新增多架构 Docker 镜像自动构建**
    - 支持 x86_64 和 ARM64 架构
-   - GitHub Actions 自动构建和推送
+   - 配置 GitHub Actions 自动构建和推送
+   - 支持多种镜像标签策略（latest、版本号、SHA 等）
+
+4. **更新文档**
+   - 添加 Claude API 配置示例（推荐 claude-sonnet-4-5 模型）
+   - 完善 GitHub Actions 构建说明
+   - 添加镜像使用指南
 
 ---
 

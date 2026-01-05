@@ -25,3 +25,7 @@ __pycache__/
 *.pyo
 *.pyd
 *.db
+
+# Docker 构建日志
+deploy/build.log
+*.log
