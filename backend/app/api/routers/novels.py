@@ -266,6 +266,7 @@ async def generate_blueprint(
         user_id=current_user.id,
         timeout=480.0,
         response_format=None,
+        max_tokens=16000,
     )
     blueprint_raw = remove_think_tags(blueprint_raw)
 
