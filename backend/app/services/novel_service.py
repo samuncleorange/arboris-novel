@@ -6,10 +6,10 @@ from datetime import datetime, timezone
 from typing import Any, Dict, Iterable, List, Optional
 
 _PREFERRED_CONTENT_KEYS: tuple[str, ...] = (
+    "full_content",      # 最高优先级：完整章节内容
     "content",
     "chapter_content",
     "chapter_text",
-    "full_content",
     "text",
     "body",
     "story",
