@@ -83,8 +83,13 @@ const cleanVersionContent = (content: string): string => {
   if (!content) return ''
   try {
     const parsed = JSON.parse(content)
-    if (parsed && typeof parsed === 'object' && parsed.content) {
-      content = parsed.content
+    if (parsed && typeof parsed === 'object') {
+      // 优先提取 full_content，其次是 content
+      if (parsed.full_content) {
+        content = parsed.full_content
+      } else if (parsed.content) {
+        content = parsed.content
+      }
     }
   } catch (error) {
     // not a json
