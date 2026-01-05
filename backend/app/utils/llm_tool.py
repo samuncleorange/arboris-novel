@@ -43,6 +43,7 @@ class LLMClient:
             "messages": [msg.to_dict() for msg in messages],
             "stream": True,
             "timeout": timeout,
+            "max_tokens": max_tokens or 8000,
             **kwargs,
         }
         if response_format:
@@ -51,8 +52,6 @@ class LLMClient:
             payload["temperature"] = temperature
         if top_p is not None:
             payload["top_p"] = top_p
-        if max_tokens is not None:
-            payload["max_tokens"] = max_tokens
 
         stream = await self._client.chat.completions.create(**payload)
         async for chunk in stream:

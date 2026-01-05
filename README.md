@@ -104,6 +104,27 @@ DB_PROVIDER=mysql docker compose up -d
 
 ---
 
+## Docker 镜像
+
+项目支持多架构 Docker 镜像（x86_64 和 ARM64）：
+
+```bash
+# 拉取最新镜像
+docker pull ghcr.io/samuncleorange/arboris-novel:latest
+
+# 使用 docker-compose
+cd deploy
+docker-compose up -d
+```
+
+### 可用镜像标签
+
+- `latest` - 最新主分支构建
+- `v1.0.0` - 语义化版本标签
+- `main-sha-xxxxxx` - 特定 commit SHA
+
+---
+
 ## 环境变量速查表
 
 这些是你可能需要改的配置（完整列表在 `.env.example` 里）：
@@ -269,6 +290,22 @@ docker compose -f deploy/docker-compose.yml up -d --build
 
 祝你写作顺利，故事精彩。
 
+---
+
+## 修复说明（v1.1.0）
+
+1. **修复 Claude API 兼容性问题**
+   - 显式设置 `response_format=None`，解决 Claude 不支持 OpenAI `response_format` 参数的问题
+
+2. **优化蓝图生成提示词**
+   - 简化 `screenwriting.md`，减少 token 消耗
+   - 增强 JSON 输出格式约束
+
+3. **多架构 Docker 镜像**
+   - 支持 x86_64 和 ARM64 架构
+   - GitHub Actions 自动构建和推送
+
+---
 
 
 

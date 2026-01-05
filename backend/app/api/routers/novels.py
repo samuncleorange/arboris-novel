@@ -177,6 +177,7 @@ async def converse_with_concept(
         temperature=0.8,
         user_id=current_user.id,
         timeout=240.0,
+        response_format=None,
     )
     llm_response = remove_think_tags(llm_response)
 
@@ -264,6 +265,7 @@ async def generate_blueprint(
         temperature=0.3,
         user_id=current_user.id,
         timeout=480.0,
+        response_format=None,
     )
     blueprint_raw = remove_think_tags(blueprint_raw)
 
