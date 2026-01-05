@@ -184,7 +184,13 @@ const isSaving = ref(false)
 const cleanVersionContent = (content: string): string => {
   if (!content) return ''
   try {
-    const parsed = JSON.parse(content)
+    // 在解析 JSON 之前，先转义控制字符
+    const escapedContent = content
+      .replace(/\n/g, '\\n')
+      .replace(/\r/g, '\\r')
+      .replace(/\t/g, '\\t')
+
+    const parsed = JSON.parse(escapedContent)
     if (parsed && typeof parsed === 'object') {
       // 优先使用 full_content，其次是 content
       if (parsed.full_content) {
@@ -196,11 +202,17 @@ const cleanVersionContent = (content: string): string => {
   } catch (error) {
     // not a json, use original content
   }
+
+  // 清理字符串格式
   let cleaned = content.replace(/^"|"$/g, '')
+
+  // 将转义序列还原为实际字符
   cleaned = cleaned.replace(/\\n/g, '\n')
+  cleaned = cleaned.replace(/\\r/g, '\r')
   cleaned = cleaned.replace(/\\"/g, '"')
   cleaned = cleaned.replace(/\\t/g, '\t')
   cleaned = cleaned.replace(/\\\\/g, '\\')
+
   return cleaned
 }
 

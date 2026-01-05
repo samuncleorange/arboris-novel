@@ -203,7 +203,13 @@ const cleanVersionContent = (content: string): string => {
 
   // 尝试解析JSON，看是否是完整的章节对象
   try {
-    const parsed = JSON.parse(content)
+    // 在解析 JSON 之前，先转义控制字符
+    const escapedContent = content
+      .replace(/\n/g, '\\n')
+      .replace(/\r/g, '\\r')
+      .replace(/\t/g, '\\t')
+
+    const parsed = JSON.parse(escapedContent)
     if (parsed && typeof parsed === 'object') {
       // 优先使用 full_content，其次是 content
       if (parsed.full_content) {
@@ -219,8 +225,9 @@ const cleanVersionContent = (content: string): string => {
   // 去掉开头和结尾的引号
   let cleaned = content.replace(/^"|"$/g, '')
 
-  // 处理转义字符
+  // 处理转义字符 - 将转义序列还原为实际字符
   cleaned = cleaned.replace(/\\n/g, '\n')  // 换行符
+  cleaned = cleaned.replace(/\\r/g, '\r')  // 回车符
   cleaned = cleaned.replace(/\\"/g, '"')   // 引号
   cleaned = cleaned.replace(/\\t/g, '\t')  // 制表符
   cleaned = cleaned.replace(/\\\\/g, '\\') // 反斜杠
