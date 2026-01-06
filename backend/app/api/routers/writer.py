@@ -202,6 +202,8 @@ async def generate_chapter(
                 temperature=0.9,
                 user_id=current_user.id,
                 timeout=600.0,
+                response_format=None,  # Claude API不支持response_format参数
+                max_tokens=16000,  # 确保有足够的token生成完整章节（约4500字）
             )
             cleaned = remove_think_tags(response)
             normalized = unwrap_markdown_json(cleaned)
