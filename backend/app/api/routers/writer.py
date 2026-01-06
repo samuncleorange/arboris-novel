@@ -238,9 +238,55 @@ async def generate_chapter(
         request.chapter_number,
         version_count,
     )
+
+    # 生成多个版本，允许部分失败
     raw_versions = []
     for idx in range(version_count):
-        raw_versions.append(await _generate_single_version(idx))
+        try:
+            version = await _generate_single_version(idx)
+            raw_versions.append(version)
+        except Exception as exc:
+            logger.error(
+                "项目 %s 第 %s 章第 %s 个版本生成失败，继续尝试下一个版本: %s",
+                project_id,
+                request.chapter_number,
+                idx + 1,
+                exc,
+            )
+            # 如果是第一个版本就失败，记录错误但继续尝试其他版本
+            # 只有所有版本都失败时才抛出异常
+            if idx == version_count - 1 and not raw_versions:
+                # 所有版本都失败了，更新章节状态为failed
+                chapter.status = "failed"
+                await session.commit()
+                logger.error(
+                    "项目 %s 第 %s 章所有 %s 个版本生成都失败",
+                    project_id,
+                    request.chapter_number,
+                    version_count,
+                )
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"生成章节失败：所有 {version_count} 个版本都生成失败，请重试"
+                )
+
+    # 检查是否至少有一个版本成功
+    if not raw_versions:
+        chapter.status = "failed"
+        await session.commit()
+        raise HTTPException(
+            status_code=500,
+            detail="生成章节失败：未能成功生成任何版本"
+        )
+
+    logger.info(
+        "项目 %s 第 %s 章成功生成 %s/%s 个版本",
+        project_id,
+        request.chapter_number,
+        len(raw_versions),
+        version_count,
+    )
+
     contents: List[str] = []
     metadata: List[Dict] = []
     for variant in raw_versions:
