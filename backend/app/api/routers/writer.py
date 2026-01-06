@@ -28,7 +28,7 @@ from ...services.llm_service import LLMService
 from ...services.novel_service import NovelService
 from ...services.prompt_service import PromptService
 from ...services.vector_store_service import VectorStoreService
-from ...utils.json_utils import remove_think_tags, unwrap_markdown_json
+from ...utils.json_utils import remove_think_tags, sanitize_json_like_text, unwrap_markdown_json
 from ...repositories.system_config_repository import SystemConfigRepository
 
 router = APIRouter(prefix="/api/writer", tags=["Writer"])
@@ -207,8 +207,9 @@ async def generate_chapter(
             )
             cleaned = remove_think_tags(response)
             normalized = unwrap_markdown_json(cleaned)
+            sanitized = sanitize_json_like_text(normalized)  # 清理未转义的控制字符
             try:
-                return json.loads(normalized)
+                return json.loads(sanitized)
             except json.JSONDecodeError as parse_err:
                 logger.warning(
                     "项目 %s 第 %s 章第 %s 个版本 JSON 解析失败，将原始内容作为纯文本处理: %s",
@@ -217,7 +218,7 @@ async def generate_chapter(
                     idx + 1,
                     parse_err,
                 )
-                return {"content": normalized}
+                return {"content": sanitized}
         except HTTPException:
             raise
         except Exception as exc:
@@ -505,8 +506,9 @@ async def generate_chapter_outline(
         timeout=360.0,
     )
     normalized = unwrap_markdown_json(remove_think_tags(response))
+    sanitized = sanitize_json_like_text(normalized)
     try:
-        data = json.loads(normalized)
+        data = json.loads(sanitized)
     except json.JSONDecodeError as exc:
         logger.error(
             "项目 %s 大纲生成 JSON 解析失败: %s, 原始内容预览: %s",
