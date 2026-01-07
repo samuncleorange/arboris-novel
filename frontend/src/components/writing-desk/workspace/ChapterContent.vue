@@ -34,6 +34,17 @@
             class="inline-flex items-center gap-1 px-3 py-1.5 text-sm font-medium rounded-lg border transition-colors duration-200"
             :class="selectedChapter.content ? 'border-indigo-200 text-indigo-600 hover:bg-indigo-50' : 'border-gray-200 text-gray-400 cursor-not-allowed'"
             :disabled="!selectedChapter.content"
+            @click="copyContent"
+          >
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path>
+            </svg>
+            复制内容
+          </button>
+          <button
+            class="inline-flex items-center gap-1 px-3 py-1.5 text-sm font-medium rounded-lg border transition-colors duration-200"
+            :class="selectedChapter.content ? 'border-indigo-200 text-indigo-600 hover:bg-indigo-50' : 'border-gray-200 text-gray-400 cursor-not-allowed'"
+            :disabled="!selectedChapter.content"
             @click="exportChapterAsTxt(selectedChapter)"
           >
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -52,12 +63,13 @@
 
 <script setup lang="ts">
 import type { Chapter } from '@/api/novel'
+import { globalAlert } from '@/composables/useAlert'
 
 interface Props {
   selectedChapter: Chapter
 }
 
-defineProps<Props>()
+const props = defineProps<Props>()
 
 defineEmits(['showVersionSelector'])
 
@@ -100,6 +112,19 @@ const cleanVersionContent = (content: string): string => {
 
 const sanitizeFileName = (name: string): string => {
   return name.replace(/[\\/:*?"<>|]/g, '_')
+}
+
+const copyContent = async () => {
+  const content = cleanVersionContent(props.selectedChapter.content || '')
+  if (!content) return
+
+  try {
+    await navigator.clipboard.writeText(content)
+    globalAlert.showSuccess('内容已复制到剪贴板', '复制成功')
+  } catch (error) {
+    console.error('复制内容失败:', error)
+    globalAlert.showError('复制失败，请手动复制', '复制失败')
+  }
 }
 
 const exportChapterAsTxt = (chapter?: Chapter | null) => {
