@@ -107,7 +107,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { useNovelStore } from '@/stores/novel'
 import type { Chapter, ChapterOutline, ChapterGenerationResponse, ChapterVersion } from '@/api/novel'
@@ -419,11 +419,14 @@ const generateChapter = async (chapterNumber: number) => {
     }
 
     await novelStore.generateChapter(chapterNumber)
-    
+
+    // 等待Vue响应式更新完成，确保DOM已更新
+    await nextTick()
+
     // store 中的 project 已经被更新，所以我们不需要手动修改本地状态
     // chapterGenerationResult 也不再需要，因为 availableVersions 会从更新后的 project.chapters 中获取数据
     // showVersionSelector is now a computed property and will update automatically.
-    chapterGenerationResult.value = null 
+    chapterGenerationResult.value = null
     selectedVersionIndex.value = 0
   } catch (error) {
     console.error('生成章节失败:', error)
@@ -438,6 +441,8 @@ const generateChapter = async (chapterNumber: number) => {
 
     globalAlert.showError(`生成章节失败: ${error instanceof Error ? error.message : '未知错误'}`, '生成失败')
   } finally {
+    // 使用nextTick确保在清空生成状态前，Vue的响应式更新已完成
+    await nextTick()
     generatingChapter.value = null
   }
 }
