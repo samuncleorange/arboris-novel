@@ -328,17 +328,21 @@ async def _resolve_version_count(session: AsyncSession) -> int:
         try:
             value = int(record.value)
             if value > 0:
+                logger.info("从数据库读取版本数量: %d", value)
                 return value
         except (TypeError, ValueError):
             pass
     env_value = os.getenv("WRITER_CHAPTER_VERSION_COUNT")
+    logger.info("环境变量 WRITER_CHAPTER_VERSION_COUNT = %s", env_value)
     if env_value:
         try:
             value = int(env_value)
             if value > 0:
+                logger.info("使用环境变量版本数量: %d", value)
                 return value
         except ValueError:
             pass
+    logger.warning("未找到有效配置，使用默认值: 3")
     return 3
 
 
