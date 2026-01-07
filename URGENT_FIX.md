@@ -1,4 +1,4 @@
-# 🚨 紧急修复：章节生成JSON解析失败
+# 🚨 紧急修复：章节生成UI不更新问题
 
 ## 问题历史
 
@@ -9,7 +9,7 @@
 4. **状态卡住**：章节状态停留在`generating`，前端一直轮询显示"生成中"
 5. **无法恢复**：用户无法重试或取消，界面永久卡住
 
-### v1.1.3 发现的新问题
+### v1.1.3 发现的问题
 **章节内容被严重截断！**
 
 - **现象**：生成的章节只有约100字
@@ -17,7 +17,7 @@
 - **JSON不完整**：缺少结尾的`}`符号
 - **根本原因**：**未设置`max_tokens`参数**，使用模型默认值（4096-8192 tokens），无法生成完整的4500字章节
 
-### v1.1.4 发现的新问题（当前）⭐
+### v1.1.4 发现的问题
 **max_tokens已生效，但JSON解析失败！**
 
 - **好消息**：字符数从132增加到7000+，说明max_tokens修复生效✅
@@ -27,40 +27,66 @@
   - `Invalid control character at: line 4 column 38`
 - **结果**：JSON解析失败，前端显示完整JSON而不是纯文本
 
+### v1.1.5 发现的问题（当前）⭐
+**后端正常，但前端UI不更新！**
+
+- **好消息**：后端章节生成完全正常，JSON解析成功✅
+- **新问题**：章节生成完成后，UI回到初始"开始写作"状态
+- **用户体验**：看起来像生成失败，但实际已成功
+- **临时解决**：手动刷新页面才能看到生成的内容
+- **根本原因**：**竞态条件**导致Vue响应式更新未完成时清空了生成状态
+
 ---
 
-## 最新修复内容（v1.1.4）⭐
+## 最新修复内容（v1.1.5）⭐
 
-### 关键修复：调用sanitize_json_like_text清理控制字符
-- ✅ **在章节生成中添加`sanitize_json_like_text`调用**（代码已有此函数，但未使用）
+### 关键修复：修复前端竞态条件
+- ✅ **导入并使用`nextTick`**等待Vue响应式更新完成
+- ✅ **在清空`chapterGenerationResult`前使用`await nextTick()`**
+- ✅ **在`finally`块清空`generatingChapter`前使用`await nextTick()`**
+- ✅ 确保DOM更新完成后再改变UI状态
+
+### v1.1.4 的修复（JSON清理）
+- ✅ **在章节生成中添加`sanitize_json_like_text`调用**
 - ✅ **在大纲生成中添加`sanitize_json_like_text`调用**
 - ✅ 在JSON解析前清理所有未转义的换行符、引号、制表符
-- ✅ 确保LLM返回的JSON能被正确解析
 
 ### v1.1.3 的修复（max_tokens）
 - ✅ **在章节生成时设置`max_tokens=16000`**
 - ✅ **明确设置`response_format=None`**（Claude API不支持此参数）
-- ✅ 确保LLM有足够的token预算生成完整的4500字章节
 
 ### v1.1.2 的修复（容错机制）
 - ✅ 添加**版本生成容错机制**：允许部分版本失败
 - ✅ 只要有**1个版本成功**就能完成章节生成
 - ✅ **所有版本都失败**时正确更新状态为`failed`
-- ✅ 详细的错误日志记录
 
-### 代码改动（v1.1.4）
-**`backend/app/api/routers/writer.py` (第208-212行)**
-```python
-cleaned = remove_think_tags(response)
-normalized = unwrap_markdown_json(cleaned)
-sanitized = sanitize_json_like_text(normalized)  # ⭐ 新增：清理未转义的控制字符
-try:
-    return json.loads(sanitized)
+### 代码改动（v1.1.5）
+**`frontend/src/views/WritingDesk.vue` (第110、424、445行)**
+```typescript
+// 导入nextTick
+import { ref, computed, onMounted, nextTick } from 'vue'
+
+// 在generateChapter函数中
+await novelStore.generateChapter(chapterNumber)
+
+// 等待Vue响应式更新完成，确保DOM已更新
+await nextTick()  // ⭐ 新增
+
+chapterGenerationResult.value = null
+selectedVersionIndex.value = 0
+
+// ...
+
+} finally {
+  // 使用nextTick确保在清空生成状态前，Vue的响应式更新已完成
+  await nextTick()  // ⭐ 新增
+  generatingChapter.value = null
+}
 ```
 
 ---
 
-## 🔧 立即部署v1.1.4修复
+## 🔧 立即部署v1.1.5修复
 
 ### 等待构建完成
 
@@ -69,7 +95,7 @@ try:
 https://github.com/samuncleorange/arboris-novel/actions
 ```
 
-等待 **workflow run** 完成（查找带有v1.1.4标签的构建）
+等待 **workflow run** 完成（查找带有v1.1.5标签的构建）
 
 ### 在VPS上部署步骤
 
@@ -80,7 +106,7 @@ docker compose down
 # 2. 删除旧镜像
 docker rmi ghcr.io/samuncleorange/arboris-novel:latest
 
-# 3. 拉取新镜像（v1.1.4）
+# 3. 拉取新镜像（v1.1.5）
 docker compose pull
 
 # 4. 启动服务
@@ -90,81 +116,43 @@ docker compose up -d
 docker logs <容器名> -f
 ```
 
-### ⚠️ 重要：修改版本数量配置
+### ⚠️ 关于版本数量配置
 
-如果你修改了`.env`中的`WRITER_CHAPTER_VERSION_COUNT=1`，需要**重启容器**才能生效：
-
-```bash
-# 方法1：重启容器
-docker compose restart
-
-# 方法2：或者删除数据库中的配置（优先级更高）
-docker exec -it arboris-app sqlite3 /app/storage/app.db "DELETE FROM system_configs WHERE key='writer.chapter_versions';"
+如果你已经修改了`docker-compose.yml`第28行为：
+```yaml
+WRITER_CHAPTER_VERSION_COUNT: 1
 ```
 
-验证是否生效：
-```bash
-docker logs arboris-app -f | grep "计划生成"
-# 应该看到：项目 xxx 第 x 章计划生成 1 个版本
-```
+那么无需其他操作，直接部署即可。
 
-### ⚠️ 重要：必须删除旧章节并重新生成
+### ⚠️ 测试步骤
 
-**旧章节（v1.1.3或更早生成的）内容JSON解析失败，无法自动修复！**
-
-1. 登录网页界面
-2. 删除所有被截断的章节（如第11章）
-3. 重新生成章节
-4. 新生成的章节应该包含完整的4500字内容
+1. 删除一个旧章节（如第12章）
+2. 点击"开始写作"
+3. **不要刷新页面**
+4. 等待生成完成
+5. 应该自动显示版本选择界面✅
 
 ---
 
-## ✅ 修复后的效果（v1.1.4）
+## ✅ 修复后的效果（v1.1.5）
 
-### 完整内容生成 + 正确解析
-- ✅ 章节包含完整的7000+字符（不再是132字符）
-- ✅ JSON能正确解析（不再有"Invalid control character"错误）
-- ✅ 前端正确提取`full_content`字段
-- ✅ 网页显示纯文本小说内容（不再显示JSON结构）
-- ✅ 字数统计正确显示约4500字
+### 完整的用户体验
+- ✅ 点击"开始写作"后显示加载动画
+- ✅ 章节生成完成后**自动显示**版本选择界面（无需刷新）
+- ✅ 章节包含完整的7000+字符（约4500字）
+- ✅ JSON正确解析，前端提取`full_content`字段
+- ✅ 网页显示纯文本小说内容
 
 ### 容错机制（v1.1.2）
-- 配置生成2个版本时：
-  - 第1个成功 + 第2个失败 = ✅ **章节生成成功**（保存1个版本）
-  - 第1个失败 + 第2个成功 = ✅ **章节生成成功**（保存1个版本）
-  - 两个都失败 = ❌ **章节状态更新为`failed`**（用户可重试）
+- ✅ 配置生成1个版本时：
+  - 第1个成功 = ✅ **章节生成成功**
+  - 第1个失败 = ❌ **章节状态更新为`failed`**（用户可重试）
 
 ### 状态正确更新
 - 生成中：显示加载动画
-- 生成成功：自动跳转版本选择
+- 生成成功：**自动显示**版本选择界面
 - 生成失败：显示失败界面，提供"重新生成"按钮
-
----
-
-## 🧪 测试步骤
-
-1. **在VPS上部署v1.1.3**
-   ```bash
-   docker compose down
-   docker rmi ghcr.io/samuncleorange/arboris-novel:latest
-   docker compose pull
-   docker compose up -d
-   ```
-
-2. **删除旧章节**
-   - 刷新网页界面
-   - 找到被截断的章节（如第11章）
-   - 点击"删除章节"
-
-3. **重新生成章节**
-   - 点击"开始写作"
-   - 等待生成完成
-   - 查看版本详情
-
-4. **验证修复**
-   - ✓ 章节字数约4500字（而不是100字）
-   - ✓ 内容显示纯文本（不含JSON结构）
-   - ✓ 可以正常选择版本
 
 ---
 
@@ -176,61 +164,79 @@ docker logs arboris-app -f | grep "计划生成"
 docker logs <容器名> -f | grep -E "(章节|版本|生成|JSON解析)"
 ```
 
-**正常日志示例（v1.1.4）：**
+**正常日志示例（v1.1.5）：**
 ```
-[INFO] 项目 xxx 第 11 章计划生成 1 个版本
+[INFO] 项目 xxx 第 12 章计划生成 1 个版本
 [INFO] LLM response success: model=claude-sonnet-4-5-20250929 chars=7581
-[INFO] 项目 xxx 第 11 章成功生成 1/1 个版本
-[INFO] 项目 xxx 第 11 章生成完成，已写入 1 个版本
+[INFO] 项目 xxx 第 12 章成功生成 1/1 个版本
+[INFO] 项目 xxx 第 12 章生成完成，已写入 1 个版本
 ```
 
 **应该看不到这些错误（已修复）：**
 ```
 ❌ [WARNING] LLM response truncated  # v1.1.3修复
-❌ [WARNING] JSON 解析失败，将原始内容作为纯文本处理: Expecting ',' delimiter  # v1.1.4修复
+❌ [WARNING] JSON 解析失败: Expecting ',' delimiter  # v1.1.4修复
 ❌ [WARNING] JSON 解析失败: Invalid control character  # v1.1.4修复
 ```
 
 ---
 
+## 🧪 测试步骤
+
+1. **在VPS上部署v1.1.5**
+   ```bash
+   docker compose down
+   docker rmi ghcr.io/samuncleorange/arboris-novel:latest
+   docker compose pull
+   docker compose up -d
+   ```
+
+2. **删除旧章节**
+   - 刷新网页界面
+   - 找到任意章节
+   - 点击"删除章节"
+
+3. **重新生成章节（重点测试）**
+   - 点击"开始写作"
+   - 等待生成完成（约1-2分钟）
+   - **观察：应该自动显示版本选择界面，无需刷新**
+
+4. **验证修复**
+   - ✓ 生成完成后自动显示版本选择界面（**不需要刷新**）
+   - ✓ 章节字数约4500字
+   - ✓ 内容显示纯文本（不含JSON结构）
+   - ✓ 可以正常选择版本
+
+---
+
 ## 💡 如果问题仍未解决
 
-如果部署v1.1.4后仍有问题：
+如果部署v1.1.5后仍有问题：
 
-1. **检查部署的镜像版本**
+1. **清除浏览器缓存**
+   ```
+   Chrome/Edge: Ctrl + Shift + Delete
+   Safari: Command + Option + E
+   Firefox: Ctrl + Shift + Delete
+   ```
+   选择"清除缓存"和"清除Cookie"，时间范围选择"全部"
+
+2. **检查部署的镜像版本**
    ```bash
    docker images | grep arboris-novel
    # 确认创建时间是最新的（应该是今天）
    ```
 
-2. **检查版本数量是否生效**
+3. **检查浏览器控制台**
+   - 按F12打开开发者工具
+   - 切换到Console标签
+   - 生成章节时查看是否有错误
+   - 截图发给我
+
+4. **检查版本数量是否生效**
    ```bash
    docker logs arboris-app -f | grep "计划生成"
-   # 应该看到"计划生成 1 个版本"而不是"2 个版本"
-   ```
-
-3. **检查JSON是否正确解析**
-   ```bash
-   docker logs arboris-app -f | grep "JSON解析失败"
-   # 不应该看到任何输出
-   ```
-
-4. **检查API余额**
-   ```bash
-   docker logs arboris-app -f | grep -i "quota"
-   # 如果看到"insufficient_user_quota"，说明余额不足，需要充值
-   ```
-
-5. **手动验证数据库配置**
-   ```bash
-   # 查看数据库中的版本数量配置
-   docker exec -it arboris-app sqlite3 /app/storage/app.db "SELECT * FROM system_configs WHERE key='writer.chapter_versions';"
-
-   # 如果有返回值，删除它（让环境变量生效）
-   docker exec -it arboris-app sqlite3 /app/storage/app.db "DELETE FROM system_configs WHERE key='writer.chapter_versions';"
-
-   # 重启容器
-   docker compose restart
+   # 应该看到"计划生成 1 个版本"
    ```
 
 ---
@@ -241,13 +247,14 @@ docker logs <容器名> -f | grep -E "(章节|版本|生成|JSON解析)"
 - ✅ v1.1.2：添加容错机制（部分版本失败也能继续）
 - ✅ v1.1.3：添加max_tokens参数（从132字符增加到7000+字符）
 - ✅ v1.1.4：调用sanitize_json_like_text（修复JSON解析失败）
+- ✅ v1.1.5：使用nextTick修复竞态条件（修复UI不更新）
 
 累计修复的问题：
 1. ✅ 章节生成卡死问题
 2. ✅ 响应被截断问题（max_tokens）
 3. ✅ JSON解析失败问题（控制字符清理）
 4. ✅ 前端显示完整JSON问题
-5. ✅ 版本数量配置说明
+5. ✅ 生成完成后UI不更新问题（竞态条件）
+6. ✅ 版本数量配置说明
 
-请在VPS上部署v1.1.4，删除旧章节并重新生成，应该就能看到完整的纯文本小说内容了！
-
+请在VPS上部署v1.1.5，删除旧章节并重新生成，应该就能看到流畅的章节生成体验了！
