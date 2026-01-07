@@ -331,8 +331,14 @@ const currentComponent = computed(() => {
   }
 
   const status = selectedChapter.value?.generation_status
+
+  // 优先检查 props.generatingChapter，因为本地状态更新可能比 store 更快
+  if (props.generatingChapter === props.selectedChapterNumber) {
+    return ChapterGenerating
+  }
+
   if (status === 'generating' || status === 'evaluating' || status === 'selecting') {
-    return ChapterGenerating // Use a generic "in-progress" component
+    return ChapterGenerating
   }
 
   if (status === 'waiting_for_confirm' || status === 'evaluation_failed') {
@@ -395,6 +401,15 @@ const currentComponentProps = computed(() => {
     return {}
   }
   const status = selectedChapter.value?.generation_status
+
+  // 优先检查 props.generatingChapter
+  if (props.generatingChapter === props.selectedChapterNumber) {
+    return {
+      chapterNumber: props.selectedChapterNumber,
+      status: 'generating'
+    }
+  }
+
   if (status === 'generating' || status === 'evaluating' || status === 'selecting') {
     return {
       chapterNumber: props.selectedChapterNumber,

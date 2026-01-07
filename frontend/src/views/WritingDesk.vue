@@ -428,6 +428,9 @@ const generateChapter = async (chapterNumber: number) => {
     // showVersionSelector is now a computed property and will update automatically.
     chapterGenerationResult.value = null
     selectedVersionIndex.value = 0
+
+    // 确保 generatingChapter 在成功后立即清空，让 UI 能够正确响应新的状态
+    generatingChapter.value = null
   } catch (error) {
     console.error('生成章节失败:', error)
 
@@ -440,9 +443,6 @@ const generateChapter = async (chapterNumber: number) => {
     }
 
     globalAlert.showError(`生成章节失败: ${error instanceof Error ? error.message : '未知错误'}`, '生成失败')
-  } finally {
-    // 使用nextTick确保在清空生成状态前，Vue的响应式更新已完成
-    await nextTick()
     generatingChapter.value = null
   }
 }
