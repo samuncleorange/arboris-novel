@@ -7,6 +7,7 @@
       :total-chapters="totalChapters"
       :is-auto-running="isAutoRunning"
       :is-all-chapters-completed="isAllChaptersCompleted"
+      :is-admin="isAdmin"
       @go-back="goBack"
       @view-project-detail="viewProjectDetail"
       @toggle-sidebar="toggleSidebar"
@@ -114,6 +115,7 @@
 import { ref, computed, onMounted, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { useNovelStore } from '@/stores/novel'
+import { useAuthStore } from '@/stores/auth'
 import type { Chapter, ChapterOutline, ChapterGenerationResponse, ChapterVersion } from '@/api/novel'
 import { globalAlert } from '@/composables/useAlert'
 import Tooltip from '@/components/Tooltip.vue'
@@ -132,6 +134,10 @@ interface Props {
 const props = defineProps<Props>()
 const router = useRouter()
 const novelStore = useNovelStore()
+const authStore = useAuthStore()
+
+// 管理员权限检查
+const isAdmin = computed(() => authStore.user?.is_admin ?? false)
 
 // 状态管理
 const selectedChapterNumber = ref<number | null>(null)
@@ -676,8 +682,14 @@ const autoSelectVersion = async (chapterNumber: number): Promise<boolean> => {
   }
 }
 
-// 一键写作主方法
+// 一键写作主方法（仅管理员可用）
 const startAutoRun = async () => {
+  // 权限检查
+  if (!isAdmin.value) {
+    globalAlert.showError('此功能仅管理员可用', '权限不足')
+    return
+  }
+
   if (isAutoRunning.value) return
 
   if (!project.value?.blueprint?.chapter_outline?.length) {

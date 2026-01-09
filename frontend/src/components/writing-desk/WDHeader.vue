@@ -26,9 +26,9 @@
 
         <!-- 右侧：操作按钮 -->
         <div class="flex items-center gap-1 sm:gap-2">
-          <!-- 一键写作按钮 -->
+          <!-- 一键写作按钮（仅管理员可见） -->
           <button
-            v-if="!isAutoRunning && !isAllChaptersCompleted && hasChapterOutline"
+            v-if="isAdmin && !isAutoRunning && !isAllChaptersCompleted && hasChapterOutline"
             @click="$emit('startAutoRun')"
             class="px-3 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-lg hover:from-purple-700 hover:to-indigo-700 transition-all shadow-md hover:shadow-lg flex items-center gap-2 text-sm font-medium"
           >
@@ -38,9 +38,9 @@
             <span class="hidden sm:inline">一键写作</span>
           </button>
 
-          <!-- 停止自动写作按钮 -->
+          <!-- 停止自动写作按钮（仅管理员可见） -->
           <button
-            v-if="isAutoRunning"
+            v-if="isAdmin && isAutoRunning"
             @click="$emit('stopAutoRun')"
             class="px-3 py-2 bg-gradient-to-r from-red-500 to-orange-500 text-white rounded-lg hover:from-red-600 hover:to-orange-600 transition-all shadow-md hover:shadow-lg flex items-center gap-2 text-sm font-medium animate-pulse"
           >
@@ -50,9 +50,9 @@
             <span class="hidden sm:inline">停止写作</span>
           </button>
 
-          <!-- 已完成标识 -->
+          <!-- 已完成标识（仅管理员可见） -->
           <span
-            v-if="isAllChaptersCompleted"
+            v-if="isAdmin && isAllChaptersCompleted"
             class="px-3 py-2 bg-green-100 text-green-700 rounded-lg flex items-center gap-2 text-sm font-medium"
           >
             <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
@@ -118,6 +118,7 @@ interface Props {
   totalChapters: number
   isAutoRunning?: boolean
   isAllChaptersCompleted?: boolean
+  isAdmin?: boolean
 }
 
 const props = defineProps<Props>()
