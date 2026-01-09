@@ -356,12 +356,15 @@ const currentComponent = computed(() => {
 
 // Polling for chapter status updates
 const pollingTimer = ref<number | null>(null)
+const POLLING_INTERVAL = 3000 // 3秒轮询一次，更激进地检测状态变化
 
 const startPolling = () => {
   stopPolling()
+  // 立即触发一次状态获取
+  emit('fetchChapterStatus')
   pollingTimer.value = window.setInterval(() => {
     emit('fetchChapterStatus')
-  }, 10000)
+  }, POLLING_INTERVAL)
 }
 
 const stopPolling = () => {
@@ -372,16 +375,16 @@ const stopPolling = () => {
 }
 
 watch(
-  () => [selectedChapter.value?.generation_status, props.evaluatingChapter, props.isSelectingVersion, props.selectedChapterNumber],
-  ([status, evaluating, selecting, chapterNumber]) => {
+  () => [selectedChapter.value?.generation_status, props.evaluatingChapter, props.isSelectingVersion, props.selectedChapterNumber, props.generatingChapter],
+  ([status, evaluating, selecting, chapterNumber, generating]) => {
     if (chapterNumber === null) {
       stopPolling()
       return
     }
 
-    const isEvaluating = evaluating === chapterNumber
-    // Poll when generating, evaluating, or selecting a version
-    const needsPolling = status === 'generating' || status === 'evaluating' || status === 'selecting'
+    // 当正在生成、评估、选择版本，或者 generatingChapter 指向当前章节时都需要轮询
+    const isGenerating = generating === chapterNumber
+    const needsPolling = status === 'generating' || status === 'evaluating' || status === 'selecting' || isGenerating
 
     if (needsPolling) {
       startPolling()

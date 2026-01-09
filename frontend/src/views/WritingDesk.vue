@@ -5,9 +5,13 @@
       :progress="progress"
       :completed-chapters="completedChapters"
       :total-chapters="totalChapters"
+      :is-auto-running="isAutoRunning"
+      :is-all-chapters-completed="isAllChaptersCompleted"
       @go-back="goBack"
       @view-project-detail="viewProjectDetail"
       @toggle-sidebar="toggleSidebar"
+      @start-auto-run="startAutoRun"
+      @stop-auto-run="stopAutoRun"
     />
 
     <!-- 主要内容区域 -->
@@ -142,6 +146,10 @@ const showEditChapterModal = ref(false)
 const editingChapter = ref<ChapterOutline | null>(null)
 const isGeneratingOutline = ref(false)
 const showGenerateOutlineModal = ref(false)
+
+// 一键写作状态
+const isAutoRunning = ref(false)
+const autoRunStopRequested = ref(false)
 
 // 计算属性
 const project = computed(() => novelStore.currentProject)
@@ -420,16 +428,14 @@ const generateChapter = async (chapterNumber: number) => {
 
     await novelStore.generateChapter(chapterNumber)
 
-    // 等待Vue响应式更新完成，确保DOM已更新
+    // 强制刷新整个项目数据，确保状态同步
+    await novelStore.loadProject(props.id, true)
+
+    // 等待Vue响应式更新完成
     await nextTick()
 
-    // store 中的 project 已经被更新，所以我们不需要手动修改本地状态
-    // chapterGenerationResult 也不再需要，因为 availableVersions 会从更新后的 project.chapters 中获取数据
-    // showVersionSelector is now a computed property and will update automatically.
     chapterGenerationResult.value = null
     selectedVersionIndex.value = 0
-
-    // 确保 generatingChapter 在成功后立即清空，让 UI 能够正确响应新的状态
     generatingChapter.value = null
   } catch (error) {
     console.error('生成章节失败:', error)
@@ -444,6 +450,7 @@ const generateChapter = async (chapterNumber: number) => {
 
     globalAlert.showError(`生成章节失败: ${error instanceof Error ? error.message : '未知错误'}`, '生成失败')
     generatingChapter.value = null
+    throw error // 重新抛出错误，让自动写作可以捕获
   }
 }
 
@@ -595,6 +602,159 @@ const handleGenerateOutline = async (numChapters: number) => {
     globalAlert.showError(`生成大纲失败: ${error instanceof Error ? error.message : '未知错误'}`, '生成失败')
   } finally {
     isGeneratingOutline.value = false
+  }
+}
+
+// ==================== 一键写作功能 ====================
+
+// 获取下一个需要生成的章节号
+const getNextChapterToGenerate = (): number | null => {
+  if (!project.value?.blueprint?.chapter_outline) return null
+
+  const outlines = project.value.blueprint.chapter_outline
+    .slice()
+    .sort((a, b) => a.chapter_number - b.chapter_number)
+
+  for (const outline of outlines) {
+    const chapter = project.value.chapters.find(ch => ch.chapter_number === outline.chapter_number)
+    // 如果章节不存在，或者状态不是 successful，则需要生成
+    if (!chapter || chapter.generation_status !== 'successful') {
+      // 如果状态是 waiting_for_confirm，需要先选择版本
+      if (chapter?.generation_status === 'waiting_for_confirm') {
+        return outline.chapter_number
+      }
+      // 如果状态是其他（not_generated, failed 等），需要生成
+      if (!chapter || chapter.generation_status === 'not_generated' || chapter.generation_status === 'failed') {
+        return outline.chapter_number
+      }
+    }
+  }
+  return null // 所有章节都已完成
+}
+
+// 检查是否所有章节都已完成
+const isAllChaptersCompleted = computed(() => {
+  if (!project.value?.blueprint?.chapter_outline) return false
+  const totalOutlines = project.value.blueprint.chapter_outline.length
+  const completedChapters = project.value.chapters.filter(ch => ch.generation_status === 'successful').length
+  return completedChapters >= totalOutlines
+})
+
+// 自动选择版本（选择第一个版本）
+const autoSelectVersion = async (chapterNumber: number): Promise<boolean> => {
+  try {
+    selectedChapterNumber.value = chapterNumber
+    await nextTick()
+
+    // 等待数据刷新
+    await novelStore.loadProject(props.id, true)
+    await nextTick()
+
+    const chapter = project.value?.chapters.find(ch => ch.chapter_number === chapterNumber)
+    if (!chapter || chapter.generation_status !== 'waiting_for_confirm') {
+      return false
+    }
+
+    // 自动选择第一个版本
+    if (project.value?.chapters) {
+      const ch = project.value.chapters.find(c => c.chapter_number === chapterNumber)
+      if (ch) {
+        ch.generation_status = 'selecting'
+      }
+    }
+
+    await novelStore.selectChapterVersion(chapterNumber, 0)
+
+    // 刷新项目数据
+    await novelStore.loadProject(props.id, true)
+    await nextTick()
+
+    return true
+  } catch (error) {
+    console.error(`自动选择版本失败 (章节 ${chapterNumber}):`, error)
+    return false
+  }
+}
+
+// 一键写作主方法
+const startAutoRun = async () => {
+  if (isAutoRunning.value) return
+
+  if (!project.value?.blueprint?.chapter_outline?.length) {
+    globalAlert.showError('请先生成章节大纲', '无法开始')
+    return
+  }
+
+  isAutoRunning.value = true
+  autoRunStopRequested.value = false
+
+  globalAlert.showSuccess('一键写作已启动，将自动完成所有章节', '开始写作')
+
+  try {
+    while (!autoRunStopRequested.value) {
+      // 刷新项目状态
+      await novelStore.loadProject(props.id, true)
+      await nextTick()
+
+      const nextChapter = getNextChapterToGenerate()
+
+      if (nextChapter === null) {
+        // 所有章节都已完成
+        globalAlert.showSuccess('所有章节已完成写作！', '写作完成')
+        break
+      }
+
+      selectedChapterNumber.value = nextChapter
+
+      const chapter = project.value?.chapters.find(ch => ch.chapter_number === nextChapter)
+
+      if (chapter?.generation_status === 'waiting_for_confirm') {
+        // 需要选择版本
+        console.log(`自动选择章节 ${nextChapter} 的版本...`)
+        const success = await autoSelectVersion(nextChapter)
+        if (!success) {
+          globalAlert.showError(`章节 ${nextChapter} 版本选择失败，自动写作暂停`, '选择失败')
+          break
+        }
+      } else {
+        // 需要生成章节
+        console.log(`自动生成章节 ${nextChapter}...`)
+        try {
+          await generateChapter(nextChapter)
+
+          // 生成完成后，等待一下再自动选择版本
+          await new Promise(resolve => setTimeout(resolve, 1000))
+
+          // 再次检查状态，如果是等待确认，自动选择
+          await novelStore.loadProject(props.id, true)
+          await nextTick()
+
+          const updatedChapter = project.value?.chapters.find(ch => ch.chapter_number === nextChapter)
+          if (updatedChapter?.generation_status === 'waiting_for_confirm') {
+            console.log(`自动选择章节 ${nextChapter} 的版本...`)
+            await autoSelectVersion(nextChapter)
+          }
+        } catch (error) {
+          console.error(`生成章节 ${nextChapter} 失败:`, error)
+          globalAlert.showError(`章节 ${nextChapter} 生成失败，自动写作暂停`, '生成失败')
+          break
+        }
+      }
+
+      // 短暂延迟，避免请求过于频繁
+      await new Promise(resolve => setTimeout(resolve, 500))
+    }
+  } finally {
+    isAutoRunning.value = false
+    autoRunStopRequested.value = false
+  }
+}
+
+// 停止一键写作
+const stopAutoRun = () => {
+  if (isAutoRunning.value) {
+    autoRunStopRequested.value = true
+    globalAlert.showSuccess('正在停止自动写作...', '停止中')
   }
 }
 

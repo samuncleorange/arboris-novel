@@ -26,6 +26,43 @@
 
         <!-- 右侧：操作按钮 -->
         <div class="flex items-center gap-1 sm:gap-2">
+          <!-- 一键写作按钮 -->
+          <button
+            v-if="!isAutoRunning && !isAllChaptersCompleted && hasChapterOutline"
+            @click="$emit('startAutoRun')"
+            class="px-3 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-lg hover:from-purple-700 hover:to-indigo-700 transition-all shadow-md hover:shadow-lg flex items-center gap-2 text-sm font-medium"
+          >
+            <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+              <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clip-rule="evenodd"></path>
+            </svg>
+            <span class="hidden sm:inline">一键写作</span>
+          </button>
+
+          <!-- 停止自动写作按钮 -->
+          <button
+            v-if="isAutoRunning"
+            @click="$emit('stopAutoRun')"
+            class="px-3 py-2 bg-gradient-to-r from-red-500 to-orange-500 text-white rounded-lg hover:from-red-600 hover:to-orange-600 transition-all shadow-md hover:shadow-lg flex items-center gap-2 text-sm font-medium animate-pulse"
+          >
+            <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+              <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8 7a1 1 0 00-1 1v4a1 1 0 001 1h4a1 1 0 001-1V8a1 1 0 00-1-1H8z" clip-rule="evenodd"></path>
+            </svg>
+            <span class="hidden sm:inline">停止写作</span>
+          </button>
+
+          <!-- 已完成标识 -->
+          <span
+            v-if="isAllChaptersCompleted"
+            class="px-3 py-2 bg-green-100 text-green-700 rounded-lg flex items-center gap-2 text-sm font-medium"
+          >
+            <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+              <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path>
+            </svg>
+            <span class="hidden sm:inline">已完成</span>
+          </span>
+
+          <div class="w-px h-6 bg-gray-300 hidden sm:block"></div>
+
           <button
             @click="$emit('viewProjectDetail')"
             class="p-2 sm:px-3 sm:py-2 text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-lg transition-colors flex items-center gap-2"
@@ -61,6 +98,7 @@
 </template>
 
 <script setup lang="ts">
+import { computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import type { NovelProject } from '@/api/novel'
@@ -78,9 +116,16 @@ interface Props {
   progress: number
   completedChapters: number
   totalChapters: number
+  isAutoRunning?: boolean
+  isAllChaptersCompleted?: boolean
 }
 
-defineProps<Props>()
+const props = defineProps<Props>()
 
-defineEmits(['goBack', 'viewProjectDetail', 'toggleSidebar'])
+// 检查是否有章节大纲
+const hasChapterOutline = computed(() => {
+  return props.project?.blueprint?.chapter_outline && props.project.blueprint.chapter_outline.length > 0
+})
+
+defineEmits(['goBack', 'viewProjectDetail', 'toggleSidebar', 'startAutoRun', 'stopAutoRun'])
 </script>
