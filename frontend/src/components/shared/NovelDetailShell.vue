@@ -19,9 +19,14 @@
               <h1 class="text-xl sm:text-2xl lg:text-3xl font-bold text-slate-900 truncate">
                 {{ formattedTitle }}
               </h1>
-              <p v-if="overviewMeta.updated_at" class="text-xs sm:text-sm text-slate-500 mt-0.5">
-                最近更新：{{ overviewMeta.updated_at }}
-              </p>
+              <div class="flex items-center gap-3 mt-0.5">
+                <p v-if="overviewMeta.updated_at" class="text-xs sm:text-sm text-slate-500">
+                  最近更新：{{ overviewMeta.updated_at }}
+                </p>
+                <p v-if="formattedWordCount" class="text-xs sm:text-sm text-indigo-600 font-medium">
+                  {{ formattedWordCount }}
+                </p>
+              </div>
             </div>
           </div>
 
@@ -354,6 +359,14 @@ const novel = computed(() => !props.isAdmin ? novelStore.currentProject as Novel
 const formattedTitle = computed(() => {
   const title = overviewMeta.title || '加载中...'
   return title.startsWith('《') && title.endsWith('》') ? title : `《${title}》`
+})
+
+const formattedWordCount = computed(() => {
+  const wordCount = novel.value?.total_word_count || 0
+  if (wordCount >= 10000) {
+    return `${(wordCount / 10000).toFixed(1)} 万字`
+  }
+  return `${wordCount.toLocaleString()} 字`
 })
 
 const componentContainerClass = computed(() => {

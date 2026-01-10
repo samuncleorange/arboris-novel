@@ -59,6 +59,7 @@ class Chapter(ChapterOutline):
     versions: Optional[List[str]] = None
     evaluation: Optional[str] = None
     generation_status: ChapterGenerationStatus = ChapterGenerationStatus.NOT_GENERATED
+    word_count: int = 0
 
 
 class Relationship(BaseModel):
@@ -92,6 +93,7 @@ class NovelProject(BaseModel):
     conversation_history: List[Dict[str, Any]] = []
     blueprint: Optional[Blueprint] = None
     chapters: List[Chapter] = []
+    total_word_count: int = 0
 
     class Config:
         from_attributes = True
@@ -104,6 +106,7 @@ class NovelProjectSummary(BaseModel):
     last_edited: str
     completed_chapters: int
     total_chapters: int
+    total_word_count: int = 0
 
 
 class BlueprintGenerationResponse(BaseModel):

@@ -52,6 +52,10 @@
               class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
           {{ chapterCount }} 章节
         </span>
+        <span v-if="formattedWordCount"
+              class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
+          {{ formattedWordCount }}
+        </span>
         <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600">
           {{ project.last_edited }}
         </span>
@@ -148,6 +152,14 @@ const getStatusText = computed(() => {
 // 使用后端返回的预计算数据
 const chapterCount = computed(() => {
   return props.project.total_chapters
+})
+
+const formattedWordCount = computed(() => {
+  const wordCount = props.project.total_word_count || 0
+  if (wordCount >= 10000) {
+    return `${(wordCount / 10000).toFixed(1)} 万字`
+  }
+  return `${wordCount.toLocaleString()} 字`
 })
 
 // 由于 NovelProjectSummary 没有 characters 信息，我们暂时返回 0 或者隐藏这个标签

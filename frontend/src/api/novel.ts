@@ -48,6 +48,7 @@ export interface NovelProject {
   blueprint?: Blueprint
   chapters: Chapter[]
   conversation_history: ConversationMessage[]
+  total_word_count: number
 }
 
 export interface NovelProjectSummary {
@@ -57,6 +58,7 @@ export interface NovelProjectSummary {
   last_edited: string
   completed_chapters: number
   total_chapters: number
+  total_word_count: number
 }
 
 export interface Blueprint {
@@ -102,7 +104,7 @@ export interface Chapter {
   versions: string[] | null  // versions是字符串数组，不是对象数组
   evaluation: string | null
   generation_status: 'not_generated' | 'generating' | 'evaluating' | 'selecting' | 'failed' | 'evaluation_failed' | 'waiting_for_confirm' | 'successful'
-  word_count?: number  // 字数统计
+  word_count: number
 }
 
 export interface ConversationMessage {

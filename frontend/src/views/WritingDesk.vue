@@ -144,6 +144,7 @@ const selectedChapterNumber = ref<number | null>(null)
 const chapterGenerationResult = ref<ChapterGenerationResponse | null>(null)
 const selectedVersionIndex = ref<number>(0)
 const generatingChapter = ref<number | null>(null)
+const isSelectingVersionLocal = ref(false)  // 本地状态，独立于 store，用于显示加载状态
 const sidebarOpen = ref(false)
 const showVersionDetailModal = ref(false)
 const detailVersionIndex = ref<number>(0)
@@ -179,7 +180,7 @@ const evaluatingChapter = computed(() => {
 })
 
 const isSelectingVersion = computed(() => {
-  return selectedChapter.value?.generation_status === 'selecting'
+  return isSelectingVersionLocal.value || selectedChapter.value?.generation_status === 'selecting'
 })
 
 const selectedChapterOutline = computed(() => {
@@ -472,6 +473,9 @@ const selectVersion = async (versionIndex: number) => {
   }
 
   try {
+    // 设置本地状态以立即显示加载界面
+    isSelectingVersionLocal.value = true
+
     // 在本地立即更新状态以反映UI
     if (project.value?.chapters) {
       const chapter = project.value.chapters.find(ch => ch.chapter_number === selectedChapterNumber.value)
@@ -483,6 +487,9 @@ const selectVersion = async (versionIndex: number) => {
     selectedVersionIndex.value = versionIndex
     await novelStore.selectChapterVersion(selectedChapterNumber.value, versionIndex)
 
+    // 清除本地加载状态
+    isSelectingVersionLocal.value = false
+
     // 状态更新将由 store 自动触发，本地无需手动更新
     // 轮询机制会处理状态变更，成功后会自动隐藏选择器
     // showVersionSelector.value = false
@@ -490,11 +497,14 @@ const selectVersion = async (versionIndex: number) => {
     globalAlert.showSuccess('版本已确认', '操作成功')
   } catch (error) {
     console.error('选择章节版本失败:', error)
+    // 清除本地加载状态
+    isSelectingVersionLocal.value = false
+
     // 错误状态下恢复章节状态
     if (project.value?.chapters) {
       const chapter = project.value.chapters.find(ch => ch.chapter_number === selectedChapterNumber.value)
       if (chapter) {
-        chapter.generation_status = 'waiting_for_confirm' // Or the previous state
+        chapter.generation_status = 'waiting_for_confirm' // Or previous state
       }
     }
     globalAlert.showError(`选择章节版本失败: ${error instanceof Error ? error.message : '未知错误'}`, '选择失败')

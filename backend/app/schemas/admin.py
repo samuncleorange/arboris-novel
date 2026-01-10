@@ -47,3 +47,4 @@ class AdminNovelSummary(BaseModel):
     last_edited: str
     completed_chapters: int
     total_chapters: int
+    total_word_count: int = 0

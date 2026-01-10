@@ -118,6 +118,12 @@ const formatProgress = (novel: Pick<AdminNovelSummary, 'completed_chapters' | 't
   return `${completed} / ${total}`
 }
 
+const formatWordCount = (wordCount: number | undefined | null) => {
+  if (!wordCount || wordCount === 0) return '0 字'
+  if (wordCount >= 10000) return `${(wordCount / 10000).toFixed(1)} 万字`
+  return `${wordCount.toLocaleString()} 字`
+}
+
 const viewDetails = (novelId: string) => {
   router.push(`/admin/novel/${novelId}`)
 }
@@ -157,6 +163,13 @@ const columns: DataTableColumns<AdminNovelSummary> = [
     key: 'progress',
     render(row) {
       return h('span', { class: 'table-progress' }, formatProgress(row))
+    }
+  },
+  {
+    title: '字数',
+    key: 'total_word_count',
+    render(row) {
+      return h('span', { class: 'table-word-count' }, formatWordCount(row.total_word_count))
     }
   },
   {

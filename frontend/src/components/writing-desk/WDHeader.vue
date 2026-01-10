@@ -20,6 +20,8 @@
               <span class="hidden md:inline">{{ progress }}% 完成</span>
               <span class="hidden lg:inline">•</span>
               <span class="hidden lg:inline">{{ completedChapters }}/{{ totalChapters }} 章</span>
+              <span class="hidden lg:inline">•</span>
+              <span class="hidden lg:inline">{{ formatWordCount }}</span>
             </div>
           </div>
         </div>
@@ -126,6 +128,14 @@ const props = defineProps<Props>()
 // 检查是否有章节大纲
 const hasChapterOutline = computed(() => {
   return props.project?.blueprint?.chapter_outline && props.project.blueprint.chapter_outline.length > 0
+})
+
+const formatWordCount = computed(() => {
+  const wordCount = props.project?.total_word_count || 0
+  if (wordCount >= 10000) {
+    return `${(wordCount / 10000).toFixed(1)} 万字`
+  }
+  return `${wordCount.toLocaleString()} 字`
 })
 
 defineEmits(['goBack', 'viewProjectDetail', 'toggleSidebar', 'startAutoRun', 'stopAutoRun'])

@@ -165,6 +165,7 @@ class NovelService:
             chapters = project.chapters
             total = len(outlines) or len(chapters)
             completed = sum(1 for chapter in chapters if chapter.selected_version_id)
+            total_word_count = sum(chapter.word_count or 0 for chapter in chapters if chapter.selected_version_id)
             summaries.append(
                 NovelProjectSummary(
                     id=project.id,
@@ -173,6 +174,7 @@ class NovelService:
                     last_edited=project.updated_at.isoformat() if project.updated_at else "未知",
                     completed_chapters=completed,
                     total_chapters=total,
+                    total_word_count=total_word_count,
                 )
             )
         return summaries
@@ -187,6 +189,7 @@ class NovelService:
             chapters = project.chapters
             total = len(outlines) or len(chapters)
             completed = sum(1 for chapter in chapters if chapter.selected_version_id)
+            total_word_count = sum(chapter.word_count or 0 for chapter in chapters if chapter.selected_version_id)
             owner = project.owner
             summaries.append(
                 AdminNovelSummary(
@@ -198,6 +201,7 @@ class NovelService:
                     last_edited=project.updated_at.isoformat() if project.updated_at else "",
                     completed_chapters=completed,
                     total_chapters=total,
+                    total_word_count=total_word_count,
                 )
             )
         return summaries
@@ -517,6 +521,8 @@ class NovelService:
             for number in chapter_numbers
         ]
 
+        total_word_count = sum(chapter.word_count or 0 for chapter in chapters_schema)
+
         return NovelProjectSchema(
             id=project.id,
             user_id=project.user_id,
@@ -525,6 +531,7 @@ class NovelService:
             conversation_history=conversations,
             blueprint=blueprint_schema,
             chapters=chapters_schema,
+            total_word_count=total_word_count,
         )
 
     async def _touch_project(self, project_id: str) -> None:
