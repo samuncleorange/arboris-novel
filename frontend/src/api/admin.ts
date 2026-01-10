@@ -1,6 +1,6 @@
 import { useAuthStore } from '@/stores/auth'
 import router from '@/router'
-import type { NovelSectionResponse, NovelSectionType } from '@/api/novel'
+import type { NovelSectionResponse, NovelSectionType, NovelProjectSummary } from '@/api/novel'
 
 // API 配置
 export const API_BASE_URL = import.meta.env.MODE === 'production' ? '' : 'http://127.0.0.1:8000'
@@ -70,15 +70,6 @@ export interface UserUpdatePayload {
   password?: string
   is_admin?: boolean
   is_active?: boolean
-}
-
-export interface NovelProjectSummary {
-  id: string
-  title: string
-  genre: string
-  last_edited: string
-  completed_chapters: number
-  total_chapters: number
 }
 
 export interface AdminNovelSummary extends NovelProjectSummary {

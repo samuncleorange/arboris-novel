@@ -428,7 +428,8 @@ const generateChapter = async (chapterNumber: number) => {
           content: '',
           versions: [],
           evaluation: null,
-          generation_status: 'generating'
+          generation_status: 'generating',
+          word_count: 0
         } as Chapter)
       }
     }
