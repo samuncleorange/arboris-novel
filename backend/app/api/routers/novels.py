@@ -31,20 +31,28 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/novels", tags=["Novels"])
 
 JSON_RESPONSE_INSTRUCTION = """
-IMPORTANT: 你的回复必须是合法的 JSON 对象，并严格包含以下字段：
+【输出格式要求 - 必须严格遵守】
+你必须返回一个纯 JSON 对象，不要包含任何 Markdown 代码块标记（如 ```json），不要包含任何额外的解释文字。
+
+返回格式如下：
 {
-  "ai_message": "string",
+  "ai_message": "你的回复内容，可以包含所有选项和问题",
   "ui_control": {
     "type": "single_choice | text_input | info_display",
     "options": [
-      {"id": "option_1", "label": "string"}
+      {"id": "option_1", "label": "选项A"}
     ],
-    "placeholder": "string"
+    "placeholder": "提示文本"
   },
   "conversation_state": {},
   "is_complete": false
 }
-不要输出额外的文本或解释。
+
+【关键规则】：
+1. 整个响应必须只有这一个 JSON 对象
+2. 不要使用 ```json 或 ``` 标记
+3. 不要在 JSON 之前或之后添加任何文字说明
+4. 确保是合法的 JSON 格式（括号匹配、逗号正确）
 """
 
 
@@ -186,19 +194,24 @@ async def converse_with_concept(
         sanitized = sanitize_json_like_text(normalized)
         parsed = json.loads(sanitized)
     except json.JSONDecodeError as exc:
-        logger.exception(
-            "Failed to parse concept converse response: project_id=%s user_id=%s error=%s\nOriginal response: %s\nNormalized: %s\nSanitized: %s",
+        logger.warning(
+            "Failed to parse concept converse as JSON, creating fallback response: project_id=%s user_id=%s error=%s\nOriginal response: %s",
             project_id,
             current_user.id,
             exc,
-            llm_response[:1000],
-            normalized[:1000] if 'normalized' in locals() else "N/A",
-            sanitized[:1000] if 'sanitized' in locals() else "N/A",
+            llm_response[:500],
         )
-        raise HTTPException(
-            status_code=500,
-            detail=f"概念对话失败，AI 返回的内容格式不正确。请重试或联系管理员。错误详情: {str(exc)}"
-        ) from exc
+        
+        parsed = {
+            "ai_message": llm_response,
+            "ui_control": {
+                "type": "text_input",
+                "placeholder": "请继续描述你的想法..."
+            },
+            "conversation_state": {},
+            "is_complete": False
+        }
+        normalized = json.dumps(parsed, ensure_ascii=False)
 
     await novel_service.append_conversation(project_id, "user", user_content)
     await novel_service.append_conversation(project_id, "assistant", normalized)

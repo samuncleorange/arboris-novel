@@ -24,14 +24,24 @@ def unwrap_markdown_json(raw_text: str) -> str:
     json_start_candidates = [idx for idx in (trimmed.find("{"), trimmed.find("[")) if idx != -1]
     if json_start_candidates:
         start_idx = min(json_start_candidates)
+        
         closing_brace = trimmed.rfind("}")
         closing_bracket = trimmed.rfind("]")
         end_idx = max(closing_brace, closing_bracket)
+        
         if end_idx != -1 and end_idx > start_idx:
             candidate = trimmed[start_idx : end_idx + 1].strip()
-            if candidate:
-                return candidate
-
+            
+            brace_count = candidate.count("{") - candidate.count("}")
+            bracket_count = candidate.count("[") - candidate.count("]")
+            
+            if brace_count == 0 and bracket_count == 0:
+                try:
+                    json.loads(candidate)
+                    return candidate
+                except json.JSONDecodeError:
+                    pass
+    
     return trimmed
 
 
