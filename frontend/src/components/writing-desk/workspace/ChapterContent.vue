@@ -75,39 +75,36 @@ defineEmits(['showVersionSelector'])
 
 const cleanVersionContent = (content: string): string => {
   if (!content) return ''
-  try {
-    // 在解析 JSON 之前，先转义控制字符
-    // 这样可以处理后端返回的包含未转义换行符的 JSON 字符串
-    const escapedContent = content
-      .replace(/\n/g, '\\n')
-      .replace(/\r/g, '\\r')
-      .replace(/\t/g, '\\t')
+  
+  let result = content.trim()
 
-    const parsed = JSON.parse(escapedContent)
-    if (parsed && typeof parsed === 'object') {
-      // 优先使用 full_content，其次是 content
-      if (parsed.full_content) {
-        content = parsed.full_content
-      } else if (parsed.content) {
-        content = parsed.content
+  // 1. 检查是否是JSON对象格式（以 { 开头，以 } 结尾）
+  if (result.startsWith('{') && result.endsWith('}')) {
+    try {
+      const parsed = JSON.parse(result)
+      if (parsed && typeof parsed === 'object') {
+        // 提取 full_content 或 content 字段
+        result = parsed.full_content || parsed.content || result
       }
+    } catch (e) {
+      // JSON解析失败，保持原样
+      console.warn('JSON解析失败，使用原始内容:', e)
     }
-  } catch (error) {
-    // not a json, use original content
-    console.log('JSON解析失败，使用原始内容:', error)
   }
 
-  // 清理字符串格式
-  let cleaned = content.replace(/^"|"$/g, '')
+  // 2. 去掉首尾的引号（如果有）
+  result = result.replace(/^["']|["']$/g, '')
 
-  // 将转义序列还原为实际字符
-  cleaned = cleaned.replace(/\\n/g, '\n')
-  cleaned = cleaned.replace(/\\r/g, '\r')
-  cleaned = cleaned.replace(/\\"/g, '"')
-  cleaned = cleaned.replace(/\\t/g, '\t')
-  cleaned = cleaned.replace(/\\\\/g, '\\')
+  // 3. 还原转义字符
+  result = result
+    .replace(/\\n/g, '\n')
+    .replace(/\\r/g, '\r')
+    .replace(/\\t/g, '\t')
+    .replace(/\\"/g, '"')
+    .replace(/\\'/g, "'")
+    .replace(/\\\\/g, '\\')
 
-  return cleaned
+  return result
 }
 
 const sanitizeFileName = (name: string): string => {

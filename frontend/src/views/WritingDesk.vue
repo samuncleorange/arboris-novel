@@ -225,39 +225,36 @@ const isCurrentVersion = (versionIndex: number) => {
 
 const cleanVersionContent = (content: string): string => {
   if (!content) return ''
+  
+  let result = content.trim()
 
-  // 尝试解析JSON，看是否是完整的章节对象
-  try {
-    // 在解析 JSON 之前，先转义控制字符
-    const escapedContent = content
-      .replace(/\n/g, '\\n')
-      .replace(/\r/g, '\\r')
-      .replace(/\t/g, '\\t')
-
-    const parsed = JSON.parse(escapedContent)
-    if (parsed && typeof parsed === 'object') {
-      // 优先使用 full_content，其次是 content
-      if (parsed.full_content) {
-        content = parsed.full_content
-      } else if (parsed.content) {
-        content = parsed.content
+  // 1. 检查是否是JSON对象格式（以 { 开头，以 } 结尾）
+  if (result.startsWith('{') && result.endsWith('}')) {
+    try {
+      const parsed = JSON.parse(result)
+      if (parsed && typeof parsed === 'object') {
+        // 提取 full_content 或 content 字段
+        result = parsed.full_content || parsed.content || result
       }
+    } catch (e) {
+      // JSON解析失败，保持原样
+      console.warn('JSON解析失败，使用原始内容:', e)
     }
-  } catch (error) {
-    // 如果不是JSON，继续处理字符串
   }
 
-  // 去掉开头和结尾的引号
-  let cleaned = content.replace(/^"|"$/g, '')
+  // 2. 去掉首尾的引号（如果有）
+  result = result.replace(/^["']|["']$/g, '')
 
-  // 处理转义字符 - 将转义序列还原为实际字符
-  cleaned = cleaned.replace(/\\n/g, '\n')  // 换行符
-  cleaned = cleaned.replace(/\\r/g, '\r')  // 回车符
-  cleaned = cleaned.replace(/\\"/g, '"')   // 引号
-  cleaned = cleaned.replace(/\\t/g, '\t')  // 制表符
-  cleaned = cleaned.replace(/\\\\/g, '\\') // 反斜杠
+  // 3. 还原转义字符
+  result = result
+    .replace(/\\n/g, '\n')
+    .replace(/\\r/g, '\r')
+    .replace(/\\t/g, '\t')
+    .replace(/\\"/g, '"')
+    .replace(/\\'/g, "'")
+    .replace(/\\\\/g, '\\')
 
-  return cleaned
+  return result
 }
 
 const canGenerateChapter = (chapterNumber: number) => {
