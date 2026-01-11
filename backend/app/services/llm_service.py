@@ -285,8 +285,9 @@ class LLMService:
                     exc,
                     exc_info=True,
                 )
-                raise  # 重新抛出异常
+                return []  # 返回空列表，允许跳过此 chunk
             except openai.APIError as exc:  # pragma: no cover - API 错误（余额不足等）
+                error_msg = str(exc)
                 logger.error(
                     "OpenAI API 错误: model=%s base_url=%s user_id=%s error=%s",
                     target_model,
@@ -295,7 +296,8 @@ class LLMService:
                     exc,
                     exc_info=True,
                 )
-                raise  # 重新抛出异常
+                # 返回空列表，允许调用者决定如何处理
+                return []
             except Exception as exc:  # pragma: no cover - 网络或鉴权失败
                 logger.error(
                     "OpenAI 嵌入请求失败: model=%s base_url=%s user_id=%s error=%s",
@@ -305,7 +307,7 @@ class LLMService:
                     exc,
                     exc_info=True,
                 )
-                raise  # 重新抛出异常
+                return []  # 返回空列表，允许跳过此 chunk
             if not response.data:
                 logger.warning("OpenAI 嵌入请求返回空数据: model=%s user_id=%s", target_model, user_id)
                 return []

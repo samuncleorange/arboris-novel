@@ -9,12 +9,12 @@
         </div>
         <div class="absolute inset-0 w-24 h-24 bg-gradient-to-r from-blue-400 to-indigo-500 rounded-full mx-auto animate-ping opacity-20"></div>
       </div>
-      <h3 class="text-2xl font-bold text-gray-800 mb-3">{{ statusText.title }}</h3>
-      <div class="space-y-2 text-gray-600 mb-6">
-        <p class="animate-pulse">{{ statusText.line1 }}</p>
-        <p class="animate-pulse" style="animation-delay: 0.5s">{{ statusText.line2 }}</p>
-        <p class="animate-pulse" style="animation-delay: 1s">🎨 描绘生动场景...</p>
-      </div>
+       <h3 class="text-2xl font-bold text-gray-800 mb-3">{{ statusText.title }}</h3>
+       <div class="space-y-2 text-gray-600 mb-6">
+         <p class="animate-pulse">{{ statusText.line1 }}</p>
+         <p class="animate-pulse" style="animation-delay: 0.5s">{{ statusText.line2 }}</p>
+         <p v-if="statusText.line3" class="animate-pulse" style="animation-delay: 1s">{{ statusText.line3 }}</p>
+       </div>
       <div class="bg-blue-50 border border-blue-200 rounded-xl p-4">
         <p class="text-blue-800 text-sm">
           <svg class="w-4 h-4 inline mr-2" fill="currentColor" viewBox="0 0 20 20">
@@ -38,32 +38,36 @@ interface Props {
 
 const props = defineProps<Props>()
 
-const statusText = computed(() => {
-  switch (props.status) {
-    case 'generating':
-      return {
-        title: `AI 正在为您创作第${props.chapterNumber}章`,
-        line1: '✨ 构思情节发展...',
-        line2: '📝 编织精彩对话...'
-      }
-    case 'evaluating':
-      return {
-        title: `AI 正在评审第${props.chapterNumber}章的多个版本`,
-        line1: '🧐 分析故事结构...',
-        line2: '⚖️ 比较版本优劣...'
-      }
-    case 'selecting':
-      return {
-        title: `正在确认第${props.chapterNumber}章的最终版本`,
-        line1: '💾 保存您的选择...',
-        line2: '✍️ 生成最终摘要...'
-      }
-    default:
-      return {
-        title: '请稍候...',
-        line1: '正在处理您的请求...',
-        line2: '...'
-      }
-  }
-})
+ const statusText = computed(() => {
+   switch (props.status) {
+     case 'generating':
+       return {
+         title: `AI 正在为您创作第${props.chapterNumber}章`,
+         line1: '✨ 构思情节发展...',
+         line2: '📝 编织精彩对话...',
+         line3: '🎨 描绘生动场景...'
+       }
+     case 'evaluating':
+       return {
+         title: `AI 正在评审第${props.chapterNumber}章的多个版本`,
+         line1: '🧐 分析故事结构...',
+         line2: '⚖️ 比较版本优劣...',
+         line3: ''
+       }
+     case 'selecting':
+       return {
+         title: `正在确认第${props.chapterNumber}章的最终版本`,
+         line1: '💾 保存您的选择...',
+         line2: '✍️ 生成最终摘要...',
+         line3: '📚 同步知识库...'
+       }
+     default:
+       return {
+         title: '请稍候...',
+         line1: '正在处理您的请求...',
+         line2: '...',
+         line3: ''
+       }
+   }
+ })
 </script>

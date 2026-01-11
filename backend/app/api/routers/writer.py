@@ -395,26 +395,86 @@ async def select_chapter_version(
             ingestion_service = ChapterIngestionService(llm_service=llm_service, vector_store=vector_store)
             outline = next((item for item in project.outlines if item.chapter_number == chapter.chapter_number), None)
             chapter_title = outline.title if outline and outline.title else f"第{chapter.chapter_number}章"
+            
+            total_chunks = 0
+            successful_chunks = 0
+            failed_chunks = 0
+            
             try:
-                await ingestion_service.ingest_chapter(
-                    project_id=project_id,
-                    chapter_number=chapter.chapter_number,
-                    title=chapter_title,
-                    content=selected.content,
-                    summary=chapter.real_summary,
-                    user_id=current_user.id,
-                )
-                logger.info(
-                    "项目 %s 第 %s 章已同步至向量库",
-                    project_id,
-                    chapter.chapter_number,
-                )
+                # 先统计章节会被切成多少块
+                content_chunks = ingestion_service._split_into_chunks(selected.content)
+                total_chunks = len(content_chunks)
+                
+                # 尝试生成所有块的向量
+                chunk_records = []
+                for index, chunk_text in enumerate(content_chunks):
+                    embedding = await llm_service.get_embedding(
+                        chunk_text,
+                        user_id=current_user.id,
+                    )
+                    if embedding:
+                        successful_chunks += 1
+                        record_id = f"{project_id}:{chapter.chapter_number}:{index}"
+                        chunk_records.append({
+                            "id": record_id,
+                            "project_id": project_id,
+                            "chapter_number": chapter.chapter_number,
+                            "chunk_index": index,
+                            "chapter_title": chapter_title,
+                            "content": chunk_text,
+                            "embedding": embedding,
+                            "metadata": {
+                                "chunk_id": record_id,
+                                "length": len(chunk_text),
+                            },
+                        })
+                    else:
+                        failed_chunks += 1
+                        continue
+                
+                # 写入成功的记录
+                if chunk_records:
+                    await vector_store.delete_by_chapters(project_id, [chapter.chapter_number])
+                    await vector_store.upsert_chunks(records=chunk_records)
+                    logger.info(
+                        "项目 %s 第 %s 章向量同步完成: 成功 %d/%d",
+                        project_id,
+                        chapter.chapter_number,
+                        successful_chunks,
+                        total_chunks,
+                    )
+                
+                # 处理错误情况
+                if successful_chunks == 0:
+                    # 全部失败，抛出异常
+                    if total_chunks > 0:
+                        logger.error(
+                            "项目 %s 第 %s 章向量同步完全失败: 0/%d",
+                            project_id,
+                            chapter.chapter_number,
+                            total_chunks,
+                        )
+                        raise HTTPException(
+                            status_code=500,
+                            detail="章节向量同步失败，可能是 AI 服务余额不足或 API 速率限制"
+                        )
+                else:
+                    # 部分成功，记录警告
+                    if failed_chunks > 0:
+                        logger.warning(
+                            "项目 %s 第 %s 章向量同步部分失败: 成功 %d/%d",
+                            project_id,
+                            chapter.chapter_number,
+                            successful_chunks,
+                            total_chunks,
+                        )
+                    
             except openai.RateLimitError as exc:
                 logger.error(
-                    "项目 %s 第 %s 章向量同步失败（速率限制）: %s",
+                    "项目 %s 第 %s 章向量同步速率限制",
                     project_id,
                     chapter.chapter_number,
-                    exc,
+                    exc_info=True,
                 )
                 raise HTTPException(
                     status_code=429,
@@ -424,7 +484,7 @@ async def select_chapter_version(
                 error_msg = str(exc)
                 if "余额不足" in error_msg or "insufficient" in error_msg.lower():
                     logger.error(
-                        "项目 %s 第 %s 章向量同步失败（余额不足）",
+                        "项目 %s 第 %s 章向量同步余额不足",
                         project_id,
                         chapter.chapter_number,
                     )
@@ -434,14 +494,15 @@ async def select_chapter_version(
                     ) from exc
                 else:
                     logger.error(
-                        "项目 %s 第 %s 章向量同步失败（API错误）: %s",
+                        "项目 %s 第 %s 章向量同步 API 错误: %s",
                         project_id,
                         chapter.chapter_number,
-                        exc,
+                        error_msg,
+                        exc_info=True,
                     )
                     raise HTTPException(
                         status_code=500,
-                        detail=f"向量同步失败: {str(exc)}"
+                        detail=f"向量同步失败: {error_msg}"
                     ) from exc
             except Exception as exc:
                 logger.error(
