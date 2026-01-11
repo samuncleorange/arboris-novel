@@ -395,19 +395,66 @@ async def select_chapter_version(
             ingestion_service = ChapterIngestionService(llm_service=llm_service, vector_store=vector_store)
             outline = next((item for item in project.outlines if item.chapter_number == chapter.chapter_number), None)
             chapter_title = outline.title if outline and outline.title else f"第{chapter.chapter_number}章"
-            await ingestion_service.ingest_chapter(
-                project_id=project_id,
-                chapter_number=chapter.chapter_number,
-                title=chapter_title,
-                content=selected.content,
-                summary=chapter.real_summary,
-                user_id=current_user.id,
-            )
-            logger.info(
-                "项目 %s 第 %s 章已同步至向量库",
-                project_id,
-                chapter.chapter_number,
-            )
+            try:
+                await ingestion_service.ingest_chapter(
+                    project_id=project_id,
+                    chapter_number=chapter.chapter_number,
+                    title=chapter_title,
+                    content=selected.content,
+                    summary=chapter.real_summary,
+                    user_id=current_user.id,
+                )
+                logger.info(
+                    "项目 %s 第 %s 章已同步至向量库",
+                    project_id,
+                    chapter.chapter_number,
+                )
+            except openai.RateLimitError as exc:
+                logger.error(
+                    "项目 %s 第 %s 章向量同步失败（速率限制）: %s",
+                    project_id,
+                    chapter.chapter_number,
+                    exc,
+                )
+                raise HTTPException(
+                    status_code=429,
+                    detail="AI 服务速率限制，请稍后重试"
+                ) from exc
+            except openai.APIError as exc:
+                error_msg = str(exc)
+                if "余额不足" in error_msg or "insufficient" in error_msg.lower():
+                    logger.error(
+                        "项目 %s 第 %s 章向量同步失败（余额不足）",
+                        project_id,
+                        chapter.chapter_number,
+                    )
+                    raise HTTPException(
+                        status_code=402,
+                        detail="AI 服务余额不足，请充值后重试"
+                    ) from exc
+                else:
+                    logger.error(
+                        "项目 %s 第 %s 章向量同步失败（API错误）: %s",
+                        project_id,
+                        chapter.chapter_number,
+                        exc,
+                    )
+                    raise HTTPException(
+                        status_code=500,
+                        detail=f"向量同步失败: {str(exc)}"
+                    ) from exc
+            except Exception as exc:
+                logger.error(
+                    "项目 %s 第 %s 章向量同步失败: %s",
+                    project_id,
+                    chapter.chapter_number,
+                    exc,
+                    exc_info=True,
+                )
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"向量同步失败: {str(exc)}"
+                ) from exc
 
     return await _load_project_schema(novel_service, project_id, current_user.id)
 

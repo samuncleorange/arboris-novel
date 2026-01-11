@@ -276,6 +276,26 @@ class LLMService:
                     input=text,
                     model=target_model,
                 )
+            except openai.RateLimitError as exc:  # pragma: no cover - 速率限制错误
+                logger.error(
+                    "OpenAI 速率限制错误: model=%s base_url=%s user_id=%s error=%s",
+                    target_model,
+                    base_url,
+                    user_id,
+                    exc,
+                    exc_info=True,
+                )
+                raise  # 重新抛出异常
+            except openai.APIError as exc:  # pragma: no cover - API 错误（余额不足等）
+                logger.error(
+                    "OpenAI API 错误: model=%s base_url=%s user_id=%s error=%s",
+                    target_model,
+                    base_url,
+                    user_id,
+                    exc,
+                    exc_info=True,
+                )
+                raise  # 重新抛出异常
             except Exception as exc:  # pragma: no cover - 网络或鉴权失败
                 logger.error(
                     "OpenAI 嵌入请求失败: model=%s base_url=%s user_id=%s error=%s",
@@ -285,7 +305,7 @@ class LLMService:
                     exc,
                     exc_info=True,
                 )
-                return []
+                raise  # 重新抛出异常
             if not response.data:
                 logger.warning("OpenAI 嵌入请求返回空数据: model=%s user_id=%s", target_model, user_id)
                 return []

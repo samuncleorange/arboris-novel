@@ -66,6 +66,7 @@ class ChapterIngestionService:
         await self._vector_store.delete_by_chapters(project_id, [chapter_number])
 
         chunk_records = []
+        failed_chunks = 0
         for index, chunk_text in enumerate(chunks):
             embedding = await self._llm_service.get_embedding(
                 chunk_text,
@@ -78,6 +79,7 @@ class ChapterIngestionService:
                     chapter_number,
                     index,
                 )
+                failed_chunks += 1
                 continue
             record_id = f"{project_id}:{chapter_number}:{index}"
             chunk_records.append(
@@ -99,10 +101,19 @@ class ChapterIngestionService:
         if chunk_records:
             await self._vector_store.upsert_chunks(records=chunk_records)
             logger.info(
-                "章节正文向量写入完成: project=%s chapter=%s 成功片段=%d",
+                "章节向量写入完成: project=%s chapter=%s success=%d failed=%d total=%d",
                 project_id,
                 chapter_number,
                 len(chunk_records),
+                failed_chunks,
+                len(chunks),
+            )
+        else:
+            logger.error(
+                "章节向量写入全部失败: project=%s chapter=%s failed=%d",
+                project_id,
+                chapter_number,
+                failed_chunks,
             )
 
         if summary:
