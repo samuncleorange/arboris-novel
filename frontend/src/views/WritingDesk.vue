@@ -209,6 +209,16 @@ const isAllChaptersCompleted = computed(() => {
   return totalChapters.value > 0 && completedChapters.value >= totalChapters.value
 })
 
+const isCurrentVersion = (versionIndex: number) => {
+  if (!selectedChapter.value?.content || !availableVersions.value?.[versionIndex]?.content) return false
+
+  // 使用cleanVersionContent函数清理内容进行比较
+  const cleanCurrentContent = cleanVersionContent(selectedChapter.value.content)
+  const cleanVersionContentStr = cleanVersionContent(availableVersions.value[versionIndex].content)
+
+  return cleanCurrentContent === cleanVersionContentStr
+}
+
 const cleanVersionContent = (content: string): string => {
   if (!content) return ''
 
@@ -847,7 +857,7 @@ const startAutoRun = async () => {
           break
         }
       } else {
-        stuckDetection = { chapter: currentChapter, status: currentStatus, count: 1 }
+        stuckDetection = { chapter: currentChapter, status: currentStatus || null, count: 1 }
       }
 
       // 检查章节状态
