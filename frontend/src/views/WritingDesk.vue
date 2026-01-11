@@ -144,7 +144,7 @@ const selectedChapterNumber = ref<number | null>(null)
 const chapterGenerationResult = ref<ChapterGenerationResponse | null>(null)
 const selectedVersionIndex = ref<number>(0)
 const generatingChapter = ref<number | null>(null)
-const isSelectingVersionLocal = ref(false)  // 本地状态，独立于 store，用于显示加载状态
+const selectingVersionChapter = ref<number | null>(null)  // 存储正在选择版本的章节号
 const sidebarOpen = ref(false)
 const showVersionDetailModal = ref(false)
 const detailVersionIndex = ref<number>(0)
@@ -182,7 +182,11 @@ const evaluatingChapter = computed(() => {
 })
 
 const isSelectingVersion = computed(() => {
-  return isSelectingVersionLocal.value || selectedChapter.value?.generation_status === 'selecting'
+  // 只有正在选择版本的章节是当前选中的章节时，才返回 true
+  if (selectingVersionChapter.value !== null && selectingVersionChapter.value === selectedChapterNumber.value) {
+    return true
+  }
+  return selectedChapter.value?.generation_status === 'selecting'
 })
 
 const selectedChapterOutline = computed(() => {
@@ -481,7 +485,7 @@ const selectVersion = async (versionIndex: number) => {
 
   try {
     // 设置本地状态以立即显示加载界面
-    isSelectingVersionLocal.value = true
+    selectingVersionChapter.value = selectedChapterNumber.value
 
     // 在本地立即更新状态以反映UI
     if (project.value?.chapters) {
@@ -512,13 +516,13 @@ const selectVersion = async (versionIndex: number) => {
       // 检查状态是否已改变
       if (currentStatus === 'successful') {
         console.log(`[selectVersion] 章节 ${selectedChapterNumber.value} 版本选择成功`)
-        isSelectingVersionLocal.value = false
+        selectingVersionChapter.value = null
         chapterGenerationResult.value = null
         globalAlert.showSuccess('版本已确认', '操作成功')
         return
       } else if (currentStatus === 'failed') {
         console.error(`[selectVersion] 章节 ${selectedChapterNumber.value} 版本选择失败`)
-        isSelectingVersionLocal.value = false
+        selectingVersionChapter.value = null
         globalAlert.showError('版本选择失败，请重试', '选择失败')
         return
       }
@@ -529,7 +533,7 @@ const selectVersion = async (versionIndex: number) => {
 
     // 超时处理
     console.error(`[selectVersion] 章节 ${selectedChapterNumber.value} 版本选择超时`)
-    isSelectingVersionLocal.value = false
+    selectingVersionChapter.value = null
     
     // 恢复章节状态
     if (project.value?.chapters) {
@@ -543,7 +547,7 @@ const selectVersion = async (versionIndex: number) => {
   } catch (error) {
     console.error('[selectVersion] 选择章节版本失败:', error)
     // 清除本地加载状态
-    isSelectingVersionLocal.value = false
+    selectingVersionChapter.value = null
 
     // 错误状态下恢复章节状态
     if (project.value?.chapters) {
