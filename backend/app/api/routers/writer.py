@@ -248,7 +248,15 @@ async def generate_chapter(
                         idx + 1,
                         parse_err,
                     )
+                    # 记录响应内容的前500字符，便于调试
+                    logger.debug("响应内容预览: %s", sanitized[:500])
+                    
                     import re
+                    
+                    # 检查是否是纯文本响应（没有JSON结构）
+                    if not sanitized.strip().startswith('{'):
+                        logger.warning("LLM返回的不是JSON格式，将作为纯文本处理")
+                        return {"full_content": sanitized}
                     
                     # 尝试修复被截断的JSON（补全缺失的引号和括号）
                     repaired = sanitized.rstrip()
@@ -269,26 +277,27 @@ async def generate_chapter(
                             logger.debug("修复JSON失败，继续使用正则提取")
                     
                     # 方案1：尝试提取完整的full_content字段（有闭合引号）
-                    match = re.search(r'"(?:full_)?content"\s*:\s*"((?:[^"\\\\]|\\\\.)*)"', sanitized, re.DOTALL)
+                    match = re.search(r'"(?:full_)?content"\s*:\s*"((?:[^"\\]|\\.)*)"', sanitized, re.DOTALL)
                     if match:
                         try:
-                            extracted = match.group(1).encode('utf-8').decode('unicode_escape')
+                            # 直接使用提取的内容，不做unicode_escape解码
+                            # 因为JSON中的转义字符已经被json.loads处理过了
+                            extracted = match.group(1)
+                            # 只处理基本的转义序列
+                            extracted = extracted.replace('\\n', '\n').replace('\\t', '\t').replace('\\"', '"').replace('\\\\', '\\')
                             logger.info("成功通过正则提取完整的content字段，长度: %d", len(extracted))
                             return { "full_content": extracted }
                         except Exception as e:
-                            logger.warning("正则提取后解码失败: %s", e)
+                            logger.warning("正则提取后处理失败: %s", e)
                     
                     # 方案2：尝试提取被截断的content字段（没有闭合引号，提取到字符串末尾）
                     match_incomplete = re.search(r'"(?:full_)?content"\s*:\s*"(.*)$', sanitized, re.DOTALL)
                     if match_incomplete:
                         try:
                             # 移除末尾可能的不完整字符和多余的括号/引号
-                            raw_content = match_incomplete.group(1).rstrip('}"]')
-                            # 尝试解码转义字符
-                            try:
-                                extracted = raw_content.encode('utf-8').decode('unicode_escape')
-                            except:
-                                extracted = raw_content
+                            raw_content = match_incomplete.group(1).rstrip('"}]')
+                            # 处理基本的转义序列，不使用unicode_escape
+                            extracted = raw_content.replace('\\n', '\n').replace('\\t', '\t').replace('\\"', '"').replace('\\\\', '\\')
                             logger.info("成功提取被截断的content字段，长度: %d", len(extracted))
                             return { "full_content": extracted }
                         except Exception as e:
