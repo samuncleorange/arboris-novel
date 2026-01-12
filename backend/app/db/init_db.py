@@ -111,12 +111,17 @@ async def _ensure_default_prompts(session: AsyncSession) -> None:
     if not prompts_dir.is_dir():
         return
 
-    result = await session.execute(select(Prompt.name))
-    existing_names = set(result.scalars().all())
-
     for prompt_file in sorted(prompts_dir.glob("*.md")):
         name = prompt_file.stem
-        if name in existing_names:
-            continue
         content = prompt_file.read_text(encoding="utf-8")
-        session.add(Prompt(name=name, content=content))
+
+        result = await session.execute(select(Prompt).where(Prompt.name == name))
+        existing_prompt = result.scalars().first()
+
+        if existing_prompt:
+            if existing_prompt.content != content:
+                existing_prompt.content = content
+                logger.info("已更新提示词: %s", name)
+        else:
+            session.add(Prompt(name=name, content=content))
+            logger.info("已创建提示词: %s", name)

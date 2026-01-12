@@ -215,18 +215,29 @@ const isCurrentVersion = (versionIndex: number) => {
 
 const cleanVersionContent = (content: string): string => {
   if (!content) return ''
-  try {
-    const parsed = JSON.parse(content)
-    if (parsed && typeof parsed === 'object') {
-      // 优先提取 full_content，其次是 content
-      if (parsed.full_content) {
-        content = parsed.full_content
-      } else if (parsed.content) {
-        content = parsed.content
+  const firstBrace = content.indexOf('{')
+  const lastBrace = content.lastIndexOf('}')
+  
+  if (firstBrace >= 0 && lastBrace > firstBrace) {
+    const potentialJson = content.substring(firstBrace, lastBrace + 1)
+    try {
+    const parsed = JSON.parse(potentialJson)
+      if (parsed && typeof parsed === 'object') {
+        if (parsed.full_content) {
+          content = parsed.full_content
+        } else if (parsed.content) {
+          content = parsed.content
+        }
       }
+    } catch (e) {
+      try {
+         const cleanJson = potentialJson.replace(/\n/g, '\\n').replace(/\r/g, '\\r')
+         const parsed = JSON.parse(cleanJson)
+         if (parsed && typeof parsed === 'object') {
+            content = parsed.full_content || parsed.content || content
+         }
+      } catch (e2) { }
     }
-  } catch (error) {
-    // not a json
   }
   let cleaned = content.replace(/^"|"$/g, '')
   cleaned = cleaned.replace(/\\n/g, '\n')

@@ -64,8 +64,8 @@ const props = defineProps<Props>()
      default:
        return {
          title: '请稍候...',
-         line1: '正在处理您的请求...',
-         line2: '...',
+         line1: '正在同步数据...',
+         line2: '处理请求中...',
          line3: ''
        }
    }

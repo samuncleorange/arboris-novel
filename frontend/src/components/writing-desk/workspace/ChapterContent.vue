@@ -78,17 +78,31 @@ const cleanVersionContent = (content: string): string => {
   
   let result = content.trim()
 
-  // 1. 检查是否是JSON对象格式（以 { 开头，以 } 结尾）
-  if (result.startsWith('{') && result.endsWith('}')) {
+  // 1. 检查是否包含JSON对象格式（以 { 开头，可能包含后续字符）
+  const firstBrace = result.indexOf('{')
+  const lastBrace = result.lastIndexOf('}')
+  
+  if (firstBrace >= 0 && lastBrace > firstBrace) {
+    const potentialJson = result.substring(firstBrace, lastBrace + 1)
     try {
-      const parsed = JSON.parse(result)
+      const parsed = JSON.parse(potentialJson)
       if (parsed && typeof parsed === 'object') {
         // 提取 full_content 或 content 字段
         result = parsed.full_content || parsed.content || result
       }
     } catch (e) {
-      // JSON解析失败，保持原样
-      console.warn('JSON解析失败，使用原始内容:', e)
+      // 尝试清理后再解析 (处理可能的转义问题)
+      console.warn('初次JSON解析失败，尝试清理后解析:', e)
+      try {
+         // 有时候内容里包含换行符导致解析失败
+         const cleanJson = potentialJson.replace(/\n/g, '\\n').replace(/\r/g, '\\r')
+         const parsed = JSON.parse(cleanJson)
+         if (parsed && typeof parsed === 'object') {
+            result = parsed.full_content || parsed.content || result
+         }
+      } catch (e2) {
+         // 依然失败，忽略
+      }
     }
   }
 

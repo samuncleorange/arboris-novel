@@ -11,7 +11,8 @@
       @go-back="goBack"
       @view-project-detail="viewProjectDetail"
       @toggle-sidebar="toggleSidebar"
-      @start-auto-run="startAutoRun"
+      @toggle-sidebar="toggleSidebar"
+      @start-auto-run="openAutoRunModal"
       @stop-auto-run="stopAutoRun"
     />
 
@@ -108,6 +109,13 @@
       @close="showGenerateOutlineModal = false"
       @generate="handleGenerateOutline"
     />
+    <WDAutoRunSetupModal
+      :show="showAutoRunModal"
+      :outlines="project?.blueprint?.chapter_outline || []"
+      :start-from-chapter="nextAutoRunChapter"
+      @close="showAutoRunModal = false"
+      @start="confirmStartAutoRun"
+    />
   </div>
 </template>
 
@@ -126,6 +134,7 @@ import WDVersionDetailModal from '@/components/writing-desk/WDVersionDetailModal
 import WDEvaluationDetailModal from '@/components/writing-desk/WDEvaluationDetailModal.vue'
 import WDEditChapterModal from '@/components/writing-desk/WDEditChapterModal.vue'
 import WDGenerateOutlineModal from '@/components/writing-desk/WDGenerateOutlineModal.vue'
+import WDAutoRunSetupModal from '@/components/writing-desk/WDAutoRunSetupModal.vue'
 
 interface Props {
   id: string
@@ -159,6 +168,7 @@ const isAutoRunning = ref(false)
 const autoRunStopRequested = ref(false)
 const isPageVisible = ref(true) // 页面可见性状态
 const autoRunLogs = ref<string[]>([]) // 自动写作日志
+const showAutoRunModal = ref(false)
 
 // 计算属性
 const project = computed(() => novelStore.currentProject)
@@ -229,16 +239,29 @@ const cleanVersionContent = (content: string): string => {
   let result = content.trim()
 
   // 1. 检查是否是JSON对象格式（以 { 开头，以 } 结尾）
-  if (result.startsWith('{') && result.endsWith('}')) {
+  // 1. 检查是否包含JSON对象格式（以 { 开头，可能包含后续字符）
+  const firstBrace = result.indexOf('{')
+  const lastBrace = result.lastIndexOf('}')
+  
+  if (firstBrace >= 0 && lastBrace > firstBrace) {
+    const potentialJson = result.substring(firstBrace, lastBrace + 1)
     try {
-      const parsed = JSON.parse(result)
+      const parsed = JSON.parse(potentialJson)
       if (parsed && typeof parsed === 'object') {
         // 提取 full_content 或 content 字段
         result = parsed.full_content || parsed.content || result
       }
     } catch (e) {
-      // JSON解析失败，保持原样
-      console.warn('JSON解析失败，使用原始内容:', e)
+      // 尝试清理后再解析
+      try {
+         const cleanJson = potentialJson.replace(/\n/g, '\\n').replace(/\r/g, '\\r')
+         const parsed = JSON.parse(cleanJson)
+         if (parsed && typeof parsed === 'object') {
+            result = parsed.full_content || parsed.content || result
+         }
+      } catch (e2) {
+         // 依然失败，忽略
+      }
     }
   }
 
@@ -340,6 +363,10 @@ const availableVersions = computed(() => {
 
   console.log('没有可用版本，selectedChapter:', selectedChapter.value)
   return []
+})
+
+const nextAutoRunChapter = computed(() => {
+  return getNextChapterToGenerate() || 1
 })
 
 
@@ -806,8 +833,35 @@ const generateSingleChapter = async (chapterNumber: number): Promise<boolean> =>
   return false
 }
 
+// 打开自动写作设置弹窗
+const openAutoRunModal = () => {
+  if (!isAdmin.value) {
+    globalAlert.showError('此功能仅管理员可用', '权限不足')
+    return
+  }
+  if (isAutoRunning.value) return
+  
+  if (!project.value?.blueprint?.chapter_outline?.length) {
+    globalAlert.showError('请先生成章节大纲', '无法开始')
+    return
+  }
+  
+  if (getNextChapterToGenerate() === null) {
+    globalAlert.showSuccess('所有章节似乎都已经完成了！', '无需自动写作')
+    return
+  }
+
+  showAutoRunModal.value = true
+}
+
+// 确认开始自动写作
+const confirmStartAutoRun = (targetChapter: number) => {
+  showAutoRunModal.value = false
+  startAutoRun(targetChapter)
+}
+
 // 一键写作主方法（仅管理员可用）
-const startAutoRun = async () => {
+const startAutoRun = async (targetLimit: number = 9999) => {
   // 权限检查
   if (!isAdmin.value) {
     globalAlert.showError('此功能仅管理员可用', '权限不足')
@@ -837,6 +891,12 @@ const startAutoRun = async () => {
     let stuckDetection = { chapter: null as number | null, status: null as string | null, count: 0 }
 
     while (!autoRunStopRequested.value && currentChapter !== null && loopCount < MAX_LOOPS) {
+      if (currentChapter > targetLimit) {
+        console.log(`[AutoRun] 已达到目标章节 ${targetLimit}，结束自动写作`)
+        globalAlert.showSuccess(`已完成至目标章节 ${targetLimit}`, '自动写作完成')
+        break
+      }
+
       loopCount++
 
       console.log(`[AutoRun] ---------- 循环 ${loopCount} ----------`)
