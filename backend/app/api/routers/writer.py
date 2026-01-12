@@ -212,12 +212,24 @@ async def generate_chapter(
                 return json.loads(sanitized)
             except json.JSONDecodeError as parse_err:
                 logger.warning(
-                    "项目 %s 第 %s 章第 %s 个版本 JSON 解析失败，将原始内容作为纯文本处理: %s",
+                    "项目 %s 第 %s 章第 %s 个版本 JSON 解析失败，尝试正则提取: %s",
                     project_id,
                     request.chapter_number,
                     idx + 1,
                     parse_err,
                 )
+                import re
+                # 尝试通过正则提取 full_content 或 content
+                # 匹配 "full_content": "..." 或 "content": "..."
+                # 匹配值中的双引号需要是转义的，非转义双引号意味着字符串结束
+                match = re.search(r'"(?:full_)?content"\s*:\s*"((?:[^"\\]|\\.)*)"', sanitized, re.DOTALL)
+                if match:
+                    try:
+                        extracted = match.group(1).encode('utf-8').decode('unicode_escape')
+                        return { "full_content": extracted }
+                    except Exception as e:
+                        logger.warning("正则提取后解码失败: %s", e)
+                
                 return {"content": sanitized}
         except HTTPException:
             raise

@@ -101,7 +101,21 @@ const cleanVersionContent = (content: string): string => {
             result = parsed.full_content || parsed.content || result
          }
       } catch (e2) {
-         // 依然失败，忽略
+         // 正则提取兜底：如果JSON解析完全失败，尝试用正则提取 content 字段
+         // 匹配 "full_content": "..." 或 "content": "..."
+         const contentMatch = potentialJson.match(/"(?:full_)?content"\s*:\s*"((?:\\.|[^"\\])*)"/)
+         if (contentMatch && contentMatch[1]) {
+            try {
+               // 尝试将提取出的字符串内容还原（处理转义字符）
+               result = JSON.parse(`"${contentMatch[1]}"`)
+            } catch (e3) {
+               // 如果还原失败，手动简单处理
+               result = contentMatch[1]
+                  .replace(/\\"/g, '"')
+                  .replace(/\\n/g, '\n')
+                  .replace(/\\\\/g, '\\')
+            }
+         }
       }
     }
   }

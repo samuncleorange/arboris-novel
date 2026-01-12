@@ -236,7 +236,20 @@ const cleanVersionContent = (content: string): string => {
          if (parsed && typeof parsed === 'object') {
             content = parsed.full_content || parsed.content || content
          }
-      } catch (e2) { }
+      } catch (e2) {
+         // 正则提取兜底
+         const contentMatch = potentialJson.match(/"(?:full_)?content"\s*:\s*"((?:\\.|[^"\\])*)"/)
+         if (contentMatch && contentMatch[1]) {
+            try {
+               content = JSON.parse(`"${contentMatch[1]}"`)
+            } catch (e3) {
+               content = contentMatch[1]
+                  .replace(/\\"/g, '"')
+                  .replace(/\\n/g, '\n')
+                  .replace(/\\\\/g, '\\')
+            }
+         }
+      }
     }
   }
   let cleaned = content.replace(/^"|"$/g, '')

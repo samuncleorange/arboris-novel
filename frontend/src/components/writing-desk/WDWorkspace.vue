@@ -231,7 +231,18 @@ const cleanVersionContent = (content: string): string => {
             result = parsed.full_content || parsed.content || result
          }
       } catch (e2) {
-         // 依然失败，忽略
+         // 正则提取兜底
+         const contentMatch = potentialJson.match(/"(?:full_)?content"\s*:\s*"((?:\\.|[^"\\])*)"/)
+         if (contentMatch && contentMatch[1]) {
+            try {
+               result = JSON.parse(`"${contentMatch[1]}"`)
+            } catch (e3) {
+               result = contentMatch[1]
+                  .replace(/\\"/g, '"')
+                  .replace(/\\n/g, '\n')
+                  .replace(/\\\\/g, '\\')
+            }
+         }
       }
     }
   }
