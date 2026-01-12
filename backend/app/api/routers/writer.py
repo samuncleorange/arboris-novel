@@ -332,21 +332,6 @@ async def generate_chapter(
             detail="生成章节失败：所有重试尝试都已耗尽"
         )
 
-        except HTTPException:
-            raise
-        except Exception as exc:
-            logger.exception(
-                "项目 %s 生成第 %s 章第 %s 个版本时发生异常: %s",
-                project_id,
-                request.chapter_number,
-                idx + 1,
-                exc,
-            )
-            raise HTTPException(
-                status_code=500,
-                detail=f"生成章节第 {idx + 1} 个版本时失败: {str(exc)[:200]}"
-            )
-
     version_count = await _resolve_version_count(session)
     logger.info(
         "项目 %s 第 %s 章计划生成 %s 个版本",
