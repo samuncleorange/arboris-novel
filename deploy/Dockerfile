@@ -8,9 +8,7 @@ ARG USE_CHINA_MIRROR=false
 WORKDIR /frontend
 
 # 配置 npm 使用中国镜像源（可选）
-RUN if [ "$USE_CHINA_MIRROR" = "true" ]; then \
-    npm config set registry https://registry.npmmirror.com; \
-    fi
+RUN [ "$USE_CHINA_MIRROR" = "true" ] && npm config set registry https://registry.npmmirror.com || true
 
 # 复制前端依赖文件
 COPY frontend/package*.json ./
@@ -34,10 +32,10 @@ FROM python:3.11-slim
 ARG USE_CHINA_MIRROR=false
 
 # 配置 apt 使用中国镜像源（可选）
-RUN if [ "$USE_CHINA_MIRROR" = "true" ]; then \
+RUN [ "$USE_CHINA_MIRROR" = "true" ] && \
     sed -i 's/deb.debian.org/mirrors.tuna.tsinghua.edu.cn/g' /etc/apt/sources.list.d/debian.sources && \
-    sed -i 's|security.debian.org/debian-security|mirrors.tuna.tsinghua.edu.cn/debian-security|g' /etc/apt/sources.list.d/debian.sources; \
-    fi
+    sed -i 's|security.debian.org/debian-security|mirrors.tuna.tsinghua.edu.cn/debian-security|g' /etc/apt/sources.list.d/debian.sources \
+    || true
 
 WORKDIR /app
 
@@ -52,9 +50,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # 配置 pip 使用中国镜像源（可选）
-RUN if [ "$USE_CHINA_MIRROR" = "true" ]; then \
-    pip config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple; \
-    fi
+RUN [ "$USE_CHINA_MIRROR" = "true" ] && \
+    pip config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple \
+    || true
 
 # 复制后端依赖文件
 COPY backend/requirements.txt .
