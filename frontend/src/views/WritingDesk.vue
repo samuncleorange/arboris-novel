@@ -11,7 +11,7 @@
       @go-back="goBack"
       @view-project-detail="viewProjectDetail"
       @toggle-sidebar="toggleSidebar"
-      @toggle-sidebar="toggleSidebar"
+
       @start-auto-run="openAutoRunModal"
       @stop-auto-run="stopAutoRun"
     />
