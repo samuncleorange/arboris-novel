@@ -161,14 +161,15 @@ class LLMService:
 
         if finish_reason == "length":
             logger.warning(
-                "LLM response truncated: model=%s user_id=%s response_length=%d",
+                "LLM response truncated by token limit: model=%s user_id=%s response_length=%d",
                 config.get("model"),
                 user_id,
                 len(full_response),
             )
+            # 抛出特定异常，触发重试机制以降低字数要求
             raise HTTPException(
-                status_code=500,
-                detail=f"AI 响应因长度限制被截断（已生成 {len(full_response)} 字符），请缩短输入内容或调整模型参数"
+                status_code=413,  # 413 Payload Too Large
+                detail="TOKEN_LIMIT_EXCEEDED"  # 特殊标记，用于触发重试
             )
 
         if not full_response:

@@ -195,42 +195,143 @@ async def generate_chapter(
     prompt_input = "\n\n".join(f"{title}\n{content}" for title, content in prompt_sections if content)
     logger.debug("章节写作提示词：%s\n%s", writer_prompt, prompt_input)
     async def _generate_single_version(idx: int) -> Dict:
-        try:
-            response = await llm_service.get_llm_response(
-                system_prompt=writer_prompt,
-                conversation_history=[{"role": "user", "content": prompt_input}],
-                temperature=0.9,
-                user_id=current_user.id,
-                timeout=600.0,
-                response_format=None,  # Claude API不支持response_format参数
-                max_tokens=16000,  # 确保有足够的token生成完整章节（约4500字）
-            )
-            cleaned = remove_think_tags(response)
-            normalized = unwrap_markdown_json(cleaned)
-            sanitized = sanitize_json_like_text(normalized)  # 清理未转义的控制字符
+        # 字数要求的重试策略：4500 -> 3500 -> 2500 -> 1500
+        target_word_counts = [4500, 3500, 2500, 1500]
+        
+        for retry_attempt, target_words in enumerate(target_word_counts):
             try:
-                return json.loads(sanitized)
-            except json.JSONDecodeError as parse_err:
-                logger.warning(
-                    "项目 %s 第 %s 章第 %s 个版本 JSON 解析失败，尝试正则提取: %s",
-                    project_id,
-                    request.chapter_number,
-                    idx + 1,
-                    parse_err,
-                )
-                import re
-                # 尝试通过正则提取 full_content 或 content
-                # 匹配 "full_content": "..." 或 "content": "..."
-                # 匹配值中的双引号需要是转义的，非转义双引号意味着字符串结束
-                match = re.search(r'"(?:full_)?content"\s*:\s*"((?:[^"\\]|\\.)*)"', sanitized, re.DOTALL)
-                if match:
-                    try:
-                        extracted = match.group(1).encode('utf-8').decode('unicode_escape')
-                        return { "full_content": extracted }
-                    except Exception as e:
-                        logger.warning("正则提取后解码失败: %s", e)
+                # 如果是重试，修改提示词中的字数要求
+                current_prompt = writer_prompt
+                if retry_attempt > 0:
+                    logger.info(
+                        "项目 %s 第 %s 章第 %s 个版本因token限制重试，降低字数要求至 %d 字",
+                        project_id,
+                        request.chapter_number,
+                        idx + 1,
+                        target_words,
+                    )
+                    # 在用户消息中明确降低字数要求
+                    retry_instruction = f"\n\n【重要提示】由于上次生成被截断，请将本章字数控制在 {target_words} 字左右，确保内容完整。"
+                    current_user_content = prompt_input + retry_instruction
+                else:
+                    current_user_content = prompt_input
                 
-                return {"content": sanitized}
+                response = await llm_service.get_llm_response(
+                    system_prompt=current_prompt,
+                    conversation_history=[{"role": "user", "content": current_user_content}],
+                    temperature=0.9,
+                    user_id=current_user.id,
+                    timeout=600.0,
+                    response_format=None,  # Claude API不支持response_format参数
+                    max_tokens=16000,  # 确保有足够的token生成完整章节
+                )
+                cleaned = remove_think_tags(response)
+                normalized = unwrap_markdown_json(cleaned)
+                sanitized = sanitize_json_like_text(normalized)  # 清理未转义的控制字符
+                try:
+                    result = json.loads(sanitized)
+                    logger.info(
+                        "项目 %s 第 %s 章第 %s 个版本生成成功（尝试 %d/%d，目标字数 %d）",
+                        project_id,
+                        request.chapter_number,
+                        idx + 1,
+                        retry_attempt + 1,
+                        len(target_word_counts),
+                        target_words,
+                    )
+                    return result
+                except json.JSONDecodeError as parse_err:
+                    logger.warning(
+                        "项目 %s 第 %s 章第 %s 个版本 JSON 解析失败，尝试正则提取: %s",
+                        project_id,
+                        request.chapter_number,
+                        idx + 1,
+                        parse_err,
+                    )
+                    import re
+                    
+                    # 尝试修复被截断的JSON（补全缺失的引号和括号）
+                    repaired = sanitized.rstrip()
+                    if repaired and not repaired.endswith('}'):
+                        # 检查是否在字符串值中被截断
+                        if repaired.count('"') % 2 == 1:  # 奇数个引号，说明字符串未闭合
+                            repaired += '"'
+                        # 补全缺失的闭合括号
+                        open_braces = repaired.count('{') - repaired.count('}')
+                        repaired += '}' * open_braces
+                        
+                        # 尝试解析修复后的JSON
+                        try:
+                            result = json.loads(repaired)
+                            logger.info("成功修复并解析JSON")
+                            return result
+                        except json.JSONDecodeError:
+                            logger.debug("修复JSON失败，继续使用正则提取")
+                    
+                    # 方案1：尝试提取完整的full_content字段（有闭合引号）
+                    match = re.search(r'"(?:full_)?content"\s*:\s*"((?:[^"\\\\]|\\\\.)*)"', sanitized, re.DOTALL)
+                    if match:
+                        try:
+                            extracted = match.group(1).encode('utf-8').decode('unicode_escape')
+                            logger.info("成功通过正则提取完整的content字段，长度: %d", len(extracted))
+                            return { "full_content": extracted }
+                        except Exception as e:
+                            logger.warning("正则提取后解码失败: %s", e)
+                    
+                    # 方案2：尝试提取被截断的content字段（没有闭合引号，提取到字符串末尾）
+                    match_incomplete = re.search(r'"(?:full_)?content"\s*:\s*"(.*)$', sanitized, re.DOTALL)
+                    if match_incomplete:
+                        try:
+                            # 移除末尾可能的不完整字符和多余的括号/引号
+                            raw_content = match_incomplete.group(1).rstrip('}"]')
+                            # 尝试解码转义字符
+                            try:
+                                extracted = raw_content.encode('utf-8').decode('unicode_escape')
+                            except:
+                                extracted = raw_content
+                            logger.info("成功提取被截断的content字段，长度: %d", len(extracted))
+                            return { "full_content": extracted }
+                        except Exception as e:
+                            logger.warning("提取被截断content失败: %s", e)
+                    
+                    # 方案3：完全无法解析，返回原始内容
+                    logger.error("无法从响应中提取章节内容，返回原始文本")
+                    return {"content": sanitized}
+                    
+            except HTTPException as http_exc:
+                # 检查是否是token限制异常
+                if http_exc.status_code == 413 and "TOKEN_LIMIT_EXCEEDED" in str(http_exc.detail):
+                    if retry_attempt < len(target_word_counts) - 1:
+                        logger.warning(
+                            "项目 %s 第 %s 章第 %s 个版本遇到token限制，将重试并降低字数（当前目标: %d字）",
+                            project_id,
+                            request.chapter_number,
+                            idx + 1,
+                            target_words,
+                        )
+                        continue  # 继续下一次重试
+                    else:
+                        logger.error(
+                            "项目 %s 第 %s 章第 %s 个版本经过 %d 次重试仍超过token限制",
+                            project_id,
+                            request.chapter_number,
+                            idx + 1,
+                            len(target_word_counts),
+                        )
+                        raise HTTPException(
+                            status_code=500,
+                            detail=f"生成章节失败：即使降低字数要求至 {target_word_counts[-1]} 字仍超过token限制，请简化章节大纲或调整模型参数"
+                        )
+                else:
+                    # 其他HTTP异常直接抛出
+                    raise
+        
+        # 如果所有重试都失败（理论上不会到这里）
+        raise HTTPException(
+            status_code=500,
+            detail="生成章节失败：所有重试尝试都已耗尽"
+        )
+
         except HTTPException:
             raise
         except Exception as exc:
